@@ -93,7 +93,7 @@ async def sell_all_shares():
 async def schedule_daily_sell():
     # Schedule the sell_all_shares function to run at 8:30 AM CST every weekday
     if datetime.today().weekday() < 5:  # Check if today is a weekday (Monday to Friday)
-        schedule.every().day.at("08:30").do(lambda: asyncio.ensure_future(sell_all_shares()))
+        schedule.every().day.at("09:30").do(lambda: asyncio.ensure_future(sell_all_shares()))
 
     while True:
         schedule.run_pending()
