@@ -1,2 +1,4 @@
 robin_stocks
 dotenv
+discord.py
+schedule
