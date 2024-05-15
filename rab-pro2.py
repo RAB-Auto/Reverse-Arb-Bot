@@ -15,7 +15,7 @@ json_file_path = 'currentArbs.json'
 # Initialize variables for credentials
 robinhood_email = None
 robinhood_password = None
-discord_token = 'MTI0MDEwNDkyNzUxOTQ0MDk1Ng.GV3RoT.YwuqrNolLo2OIbsIYGfEGvSbxiU-gMva83tdnU'  # Replace with your Discord bot token
+discord_token = 'YOUR_DISCORD_TOKEN'  # Replace with your Discord bot token
 buy_channel_id = 1240105481259716669  # Replace with your channel ID for buy notifications
 sell_channel_id = 1240109934654390382  # Replace with your channel ID for sell notifications
 
@@ -77,8 +77,9 @@ async def sell_all_shares():
         try:
             positions = r.build_holdings()
             if ticker in positions:
-                shares = positions[ticker]['quantity']
+                shares = float(positions[ticker]['quantity'])
                 price = positions[ticker]['average_buy_price']
+                print(f"Attempting to sell {shares} shares of {ticker} at ${price} each.")
                 order_result = r.order_sell_market(ticker, shares)
                 # Notify in the sell channel
                 sell_channel = bot.get_channel(sell_channel_id)
