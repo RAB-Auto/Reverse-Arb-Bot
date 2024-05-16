@@ -15,7 +15,7 @@ json_file_path = 'currentArbs.json'
 # Initialize variables for credentials
 robinhood_email = None
 robinhood_password = None
-discord_token = 'YOUR_DISCORD_TOKEN'  # Replace with your Discord bot token
+discord_token = 'MTI0MDEwNDkyNzUxOTQ0MDk1Ng.GV3RoT.YwuqrNolLo2OIbsIYGfEGvSbxiU-gMva83tdnU'  # Replace with your Discord bot token
 buy_channel_id = 1240105481259716669  # Replace with your channel ID for buy notifications
 sell_channel_id = 1240109934654390382  # Replace with your channel ID for sell notifications
 
@@ -65,40 +65,67 @@ async def on_message(message):
             # Extract relevant information from order_result
             order_id = order_result.get('id', 'N/A')
             order_state = order_result.get('state', 'N/A')
-            await message.channel.send(f"Order placed for 1 share of {ticker}. Order ID: {order_id}, State: {order_state}")
-            print(f"Order placed for 1 share of {ticker}. Order ID: {order_id}, State: {order_state}")
+            message_text = f"Order placed for 1 share of {ticker}. Order ID: {order_id}, State: {order_state}"
+            await message.channel.send(message_text)
+            print(message_text)
         except Exception as e:
-            await message.channel.send(f"Failed to place order for {ticker}: {e}")
-            print(f"Failed to place order for {ticker}: {e}")
+            error_message = f"Failed to place order for {ticker}: {e}"
+            await message.channel.send(error_message)
+            print(error_message)
 
-async def sell_all_shares():
+def sell_all_shares_sync():
     tickers = read_tickers()
+    result_messages = []
+
+    if not tickers:
+        message = "No tickers to sell today. Checking again tomorrow."
+        result_messages.append(message)
+        return message
+
     for ticker in tickers:
         try:
             positions = r.build_holdings()
             if ticker in positions:
                 shares = float(positions[ticker]['quantity'])
-                price = positions[ticker]['average_buy_price']
-                print(f"Attempting to sell {shares} shares of {ticker} at ${price} each.")
-                order_result = r.order_sell_market(ticker, shares)
-                # Notify in the sell channel
-                sell_channel = bot.get_channel(sell_channel_id)
-                await sell_channel.send(f"Sold {shares} shares of {ticker} at ${price} each. Order ID: {order_result.get('id', 'N/A')}, State: {order_result.get('state', 'N/A')}")
-                print(f"Sold {shares} shares of {ticker} at ${price} each. Order ID: {order_result.get('id', 'N/A')}, State: {order_result.get('state', 'N/A')}")
-                # Remove ticker from list after successful sell
-                tickers.remove(ticker)
-                write_tickers(tickers)
+                message = f"Attempting to sell {shares} shares of {ticker}."
+                result_messages.append(message)
+                order_result = r.order_sell_market(ticker, shares, timeInForce='gfd')
+                result_messages.append(f"Order Result: {order_result}")
+                if order_result and order_result.get('id'):
+                    order_id = order_result['id']
+                    order_state = order_result['state', 'N/A']
+                    message = f"Sold {shares} shares of {ticker}. Order ID: {order_id}, State: {order_state}"
+                    result_messages.append(message)
+                    tickers.remove(ticker)
+                    write_tickers(tickers)
+                else:
+                    raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_result}")
+            else:
+                message = f"{ticker} is not in the account. Checking again tomorrow."
+                result_messages.append(message)
         except Exception as e:
-            print(f"Failed to sell shares of {ticker}: {e}")
+            error_message = f"Failed to sell shares of {ticker}: {e}"
+            result_messages.append(error_message)
+    
+    if not result_messages:
+        result_messages.append("No shares were sold.")
+    
+    final_message = "\n".join(result_messages)
+    return final_message
 
+async def sell_all_shares():
+    result_message = sell_all_shares_sync()
+    sell_channel = bot.get_channel(sell_channel_id)
+    await sell_channel.send(result_message)
+    print(result_message)
+
+# Schedule daily sell at 8:30 AM CST on weekdays
 async def schedule_daily_sell():
-    # Schedule the sell_all_shares function to run at 8:30 AM CST every weekday
-    if datetime.today().weekday() < 5:  # Check if today is a weekday (Monday to Friday)
-        schedule.every().day.at("09:30").do(lambda: asyncio.ensure_future(sell_all_shares()))
-
-    while True:
-        schedule.run_pending()
-        await asyncio.sleep(1)
+    if datetime.today().weekday() < 5:
+        schedule.every().day.at("08:30").do(lambda: asyncio.create_task(sell_all_shares()))
+        while True:
+            schedule.run_pending()
+            await asyncio.sleep(1)
 
 async def main():
     # Login using the read credentials
