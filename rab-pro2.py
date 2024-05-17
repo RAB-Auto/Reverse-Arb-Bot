@@ -76,6 +76,7 @@ async def on_message(message):
 def sell_all_shares_sync():
     tickers = read_tickers()
     result_messages = []
+    tickers_to_remove = []
 
     if not tickers:
         message = "No tickers to sell today. Checking again tomorrow."
@@ -93,11 +94,10 @@ def sell_all_shares_sync():
                 result_messages.append(f"Order Result: {order_result}")
                 if order_result and order_result.get('id'):
                     order_id = order_result['id']
-                    order_state = order_result['state', 'N/A']
+                    order_state = order_result['state']
                     message = f"Sold {shares} shares of {ticker}. Order ID: {order_id}, State: {order_state}"
                     result_messages.append(message)
-                    tickers.remove(ticker)
-                    write_tickers(tickers)
+                    tickers_to_remove.append(ticker)
                 else:
                     raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_result}")
             else:
@@ -107,6 +107,10 @@ def sell_all_shares_sync():
             error_message = f"Failed to sell shares of {ticker}: {e}"
             result_messages.append(error_message)
     
+    # Update the tickers list to remove only successfully sold tickers
+    remaining_tickers = [ticker for ticker in tickers if ticker not in tickers_to_remove]
+    write_tickers(remaining_tickers)
+
     if not result_messages:
         result_messages.append("No shares were sold.")
     
@@ -119,10 +123,10 @@ async def sell_all_shares():
     await sell_channel.send(result_message)
     print(result_message)
 
-# Schedule daily sell at 8:30 AM CST on weekdays
+# Schedule daily sell at 8:45 AM CST on weekdays
 async def schedule_daily_sell():
     if datetime.today().weekday() < 5:
-        schedule.every().day.at("08:30").do(lambda: asyncio.create_task(sell_all_shares()))
+        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares()))
         while True:
             schedule.run_pending()
             await asyncio.sleep(1)
