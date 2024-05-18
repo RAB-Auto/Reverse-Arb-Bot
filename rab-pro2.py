@@ -19,7 +19,7 @@ json_file_path = 'currentArbs.json'
 # Initialize variables for credentials
 robinhood_email = None
 robinhood_password = None
-discord_token = os.getenv('DISCORD_TOKEN')
+discord_token = os.getenv('DISCORD_BOT_TOKEN')
 buy_channel_id = 1240105481259716669  # Replace with your channel ID for buy notifications
 sell_channel_id = 1240109934654390382  # Replace with your channel ID for sell notifications
 voo_channel_id = 1241468924034416691  # Replace with your channel ID for sell notifications
