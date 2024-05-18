@@ -7,6 +7,7 @@ import schedule
 import time
 from datetime import datetime
 import asyncio
+import math
 
 # Define the file path for the credentials and JSON file
 file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
@@ -48,6 +49,7 @@ bot = commands.Bot(command_prefix="$", intents=intents)
 async def on_ready():
     print(f'We have logged in as {bot.user}')
     await schedule_daily_sell()
+    await schedule_daily_VOO()
 
 @bot.event
 async def on_message(message):
@@ -55,25 +57,30 @@ async def on_message(message):
         ticker = message.content[1:].strip().upper()
         print(f"Processing ticker: {ticker}")
         try:
-            order_result = r.order_buy_market(ticker, 1)
-            # Read existing tickers
-            tickers = read_tickers()
-            # Add new ticker to the list
-            tickers.append(ticker)
-            # Write updated tickers to JSON file
-            write_tickers(tickers)
-            # Extract relevant information from order_result
-            order_id = order_result.get('id', 'N/A')
-            order_state = order_result.get('state', 'N/A')
-            message_text = f"Order placed for 1 share of {ticker}. Order ID: {order_id}, State: {order_state}"
-            await message.channel.send(message_text)
-            print(message_text)
+            order_result = buy_stock_robinhood(ticker)
+            await send_order_message(message.channel, order_result)
         except Exception as e:
             error_message = f"Failed to place order for {ticker}: {e}"
             await message.channel.send(error_message)
             print(error_message)
 
-def sell_all_shares_sync():
+def buy_stock_robinhood(ticker):
+    order_result = r.order_buy_market(ticker, 1)
+    # Read existing tickers
+    tickers = read_tickers()
+    # Add new ticker to the list
+    tickers.append(ticker)
+    # Write updated tickers to JSON file
+    write_tickers(tickers)
+    return order_result
+
+def buy_stock_robinhood_VOO(balance):
+    balance = float(get_cash_balance())
+    purchase_balance = balance - 5.0
+    ticker = "VOO"
+    r.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
+
+def sell_all_shares_robinhood():
     tickers = read_tickers()
     result_messages = []
     tickers_to_remove = []
@@ -117,16 +124,45 @@ def sell_all_shares_sync():
     final_message = "\n".join(result_messages)
     return final_message
 
-async def sell_all_shares():
-    result_message = sell_all_shares_sync()
+async def sell_all_shares_discord():
+    result_message = sell_all_shares_robinhood()
     sell_channel = bot.get_channel(sell_channel_id)
     await sell_channel.send(result_message)
     print(result_message)
 
+async def buy_VOO():
+    balance = get_cash_balance()
+    buy_stock_robinhood_VOO(balance)
+    message_text = f"Bought Daily VOO Shares with Arb Money. Balance: ${balance}"
+    output_channel = bot.get_channel(sell_channel_id)
+    await output_channel.send(message_text)
+    print(message_text)
+
+def get_cash_balance():
+    account_info = r.profiles.load_account_profile()
+    cash_balance = account_info.get("cash", "N/A")
+    return cash_balance
+
+async def send_order_message(channel, order_result):
+    order_id = order_result.get('id', 'N/A')
+    order_state = order_result.get('state', 'N/A')
+    ticker = order_result.get('instrument', {}).get('symbol', 'N/A')
+    message_text = f"Order placed for 1 share of {ticker}. Order ID: {order_id}, State: {order_state}"
+    await channel.send(message_text)
+    print(message_text)
+
 # Schedule daily sell at 8:45 AM CST on weekdays
 async def schedule_daily_sell():
     if datetime.today().weekday() < 5:
-        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares()))
+        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+        while True:
+            schedule.run_pending()
+            await asyncio.sleep(1)
+
+# Schedule daily VOO buy at 9:00 AM CST on weekdays
+async def schedule_daily_VOO():
+    if datetime.today().weekday() < 5:
+        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
         while True:
             schedule.run_pending()
             await asyncio.sleep(1)
