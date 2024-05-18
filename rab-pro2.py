@@ -8,6 +8,9 @@ import time
 from datetime import datetime
 import asyncio
 import math
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Define the file path for the credentials and JSON file
 file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
@@ -16,9 +19,10 @@ json_file_path = 'currentArbs.json'
 # Initialize variables for credentials
 robinhood_email = None
 robinhood_password = None
-discord_token = 'MTI0MDEwNDkyNzUxOTQ0MDk1Ng.GV3RoT.YwuqrNolLo2OIbsIYGfEGvSbxiU-gMva83tdnU'  # Replace with your Discord bot token
+discord_token = os.getenv('DISCORD_TOKEN')
 buy_channel_id = 1240105481259716669  # Replace with your channel ID for buy notifications
 sell_channel_id = 1240109934654390382  # Replace with your channel ID for sell notifications
+voo_channel_id = 1241468924034416691  # Replace with your channel ID for sell notifications
 
 # Read the file and extract credentials
 try:
@@ -134,7 +138,7 @@ async def buy_VOO():
     balance = get_cash_balance()
     buy_stock_robinhood_VOO(balance)
     message_text = f"Bought Daily VOO Shares with Arb Money. Balance: ${balance}"
-    output_channel = bot.get_channel(sell_channel_id)
+    output_channel = bot.get_channel(voo_channel_id)
     await output_channel.send(message_text)
     print(message_text)
 
