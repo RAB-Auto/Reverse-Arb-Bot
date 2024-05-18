@@ -1,27 +1,41 @@
-import robin_stocks.robinhood as r
+from public_invest_api import Public
 
-file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
+# Define the file path for the credentials
+file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt'
 
+# Initialize variables for credentials
+public_username = None
+public_password = None
+
+# Read the file and extract credentials
 try:
     with open(file_path, 'r') as file:
-        robinhood_email = file.readline().strip()  # Read the first line for the email
-        robinhood_password = file.readline().strip()  # Read the second line for the password
+        public_username = file.readline().strip()  # Read the first line for the username
+        public_password = file.readline().strip()  # Read the second line for the password
 except Exception as e:
     print(f"Failed to read file: {e}")
+    exit(1)  # Exit if there's an error reading the credentials
 
-def login():
-    login_result = r.login(robinhood_email, robinhood_password)
-    return login_result
+# Initialize and login to Public
+public = Public()
+public.login(
+    username=public_username,
+    password=public_password,
+    wait_for_2fa=True  # When logging in for the first time, you need to wait for the SMS code
+)
 
-def get_cash_balance():
-    account_info = r.profiles.load_account_profile()
-    cash_balance = account_info.get("cash", "N/A")
-    return cash_balance
+# Prompt the user for a ticker symbol
+ticker_symbol = input("Enter the ticker symbol you want to buy: ").upper()
 
-login()
-cash_balance = float(get_cash_balance())
-purchase_balance = cash_balance - 5.0
-ticker = "VOO"
-r.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
-
-print(f"Cash Balance: ${cash_balance}")
+# Place a market buy order
+try:
+    response = public.place_order(
+        symbol=ticker_symbol,
+        quantity=1,  # Number of shares to buy
+        side='BUY',
+        order_type='MARKET',  # Market order
+        time_in_force='DAY'  # Good for the day
+    )
+    print(f"Order placed successfully: {response}")
+except Exception as e:
+    print(f"Failed to place order: {e}")
