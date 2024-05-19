@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 
@@ -25,6 +26,8 @@ robinhood_email = None
 robinhood_password = None
 public_username = None
 public_password = None
+
+ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 
 # Initialize Discord bot with intents
 intents = discord.Intents.all()
@@ -62,6 +65,22 @@ def read_tickers(file_path):
 def write_tickers(file_path, tickers):
     with open(file_path, 'w') as file:
         json.dump(tickers, file)
+
+def is_market_open():
+    try:
+        # Alpha Vantage endpoint for checking market status
+        url = f"https://www.alphavantage.co/query?function=MARKET_STATUS&apikey={ALPHA_VANTAGE_API_KEY}"
+        response = requests.get(url)
+        data = response.json()
+        market_status = data.get("market_status", {}).get("status")
+
+        if market_status == "open":
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"Failed to check market status: {e}")
+        return False
 
 @bot.event
 async def on_ready():
@@ -338,21 +357,31 @@ async def send_order_message(channel, ticker, robinhood_result, public_result):
     await channel.send(message_text)
     print(message_text)
 
-# Schedule daily sell at 8:45 AM CST on weekdays
 async def schedule_daily_sell():
     if datetime.today().weekday() < 5:
-        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(check_and_sell()))
         while True:
             schedule.run_pending()
             await asyncio.sleep(1)
 
-# Schedule daily VOO buy at 9:00 AM CST on weekdays
 async def schedule_daily_VOO():
     if datetime.today().weekday() < 5:
-        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
+        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(check_and_buy_VOO()))
         while True:
             schedule.run_pending()
             await asyncio.sleep(1)
+
+async def check_and_sell():
+    if is_market_open():
+        await sell_all_shares_discord()
+    else:
+        print("Market is closed. Skipping sell operation.")
+
+async def check_and_buy_VOO():
+    if is_market_open():
+        await buy_VOO()
+    else:
+        print("Market is closed. Skipping buy operation.")
 
 async def main():
     await bot.start(discord_token)
