@@ -3,3 +3,4 @@ dotenv
 discord.py
 schedule
 public-invest-api
+yfinance

@@ -15,8 +15,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Define the file paths for credentials and JSON files
-robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
-public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt'
+robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt' #change to your robinhood password path
+public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt' #change to your public password path
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 
