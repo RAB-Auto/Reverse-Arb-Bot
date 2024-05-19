@@ -1,5 +1,7 @@
 import robin_stocks.robinhood as r
 from public_invest_api import Public
+import yfinance as yf
+import math
 import discord
 from discord.ext import commands
 import os
@@ -67,29 +69,22 @@ async def on_ready():
     
     # Send login messages
     login_message = []
-    if robinhood_email and robinhood_password:
-        try:
-            r.login(robinhood_email, robinhood_password)
-            login_message.append("Logged in successfully to RobinHood!")
-        except Exception as e:
-            login_message.append(f"RobinHood login failed: {e}")
-    else:
-        login_message.append("Failed to retrieve RobinHood credentials.")
+    try:
+        r.login(robinhood_email, robinhood_password)
+        login_message.append("Logged in successfully to RobinHood!")
+    except Exception as e:
+        login_message.append(f"RobinHood login failed: {e}")
 
-    if public_username and public_password:
-        try:
-            public = Public()
-            public.login(username=public_username, password=public_password, wait_for_2fa=True)
-            login_message.append("Logged in successfully to Public!")
-        except Exception as e:
-            login_message.append(f"Public login failed: {e}")
-    else:
-        login_message.append("Failed to retrieve Public credentials.")
+    try:
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+        login_message.append("Logged in successfully to Public!")
+    except Exception as e:
+        login_message.append(f"Public login failed: {e}")
 
-    if login_message:
-        for message in login_message:
-            print(message)
-            await bot.get_channel(alerts_channel_id).send(message)
+    for message in login_message:
+        print(message)
+        await bot.get_channel(alerts_channel_id).send(message)
     
     await schedule_daily_sell()
     await schedule_daily_VOO()
@@ -99,14 +94,27 @@ async def on_message(message):
     if message.channel.id == buy_channel_id and message.content.startswith('$'):
         ticker = message.content[1:].strip().upper()
         print(f"Processing ticker: {ticker}")
+        robinhood_result = None
+        public_result = None
         try:
             robinhood_result = buy_stock_robinhood(ticker)
-            public_result = buy_stock_public(ticker)
-            await send_order_message(message.channel, ticker, robinhood_result, public_result)
         except Exception as e:
-            error_message = f"Failed to place order for {ticker}: {e}"
-            await message.channel.send(error_message)
-            print(error_message)
+            print(f"Failed to place order for {ticker} on Robinhood: {e}")
+        try:
+            public_result = buy_stock_public(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Public: {e}")
+        await send_order_message(message.channel, ticker, robinhood_result, public_result)
+
+def get_stock_price(symbol: str):
+    stock = yf.Ticker(symbol)
+    data = stock.history(period='1d')
+    if data.empty:
+        print(f"No data for {symbol}")
+        return None
+
+    price = data['Close'].iloc[-1]
+    return round(price, 2)
 
 def buy_stock_robinhood(ticker):
     order_result = r.order_buy_market(ticker, 1)
@@ -135,11 +143,47 @@ def buy_stock_public(ticker):
     write_tickers(public_json_file_path, tickers)
     return response
 
-def buy_stock_robinhood_VOO(balance):
-    balance = float(get_cash_balance())
-    purchase_balance = balance - 5.0
-    ticker = "VOO"
-    r.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
+def buy_VOO_robinhood():
+    try:
+        balance = float(get_cash_balance_robinhood())
+        purchase_balance = balance - 5.0
+        ticker = "VOO"
+        r.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
+        return balance - purchase_balance
+    except Exception as e:
+        print(f"Failed to buy VOO on Robinhood: {e}")
+        return 'x'
+
+def buy_VOO_public():
+    try:
+        public_instance = Public()
+        public_instance.login(username=public_username, password=public_password, wait_for_2fa=True)
+        
+        balance = float(get_cash_balance_public(public_instance))
+        if (balance - 5.0 < 1):
+            return 'x'
+        else:
+            stock_price = get_stock_price('VOO')
+            if stock_price is None:
+                print("Failed to get stock price")
+                return 'x'
+
+            fractional = (balance - 5.0) / stock_price
+            fractional = math.floor(fractional * 10000) / 10000  # Keep up to 4 decimal places
+
+            response = public_instance.place_order(
+                symbol='VOO',
+                quantity=fractional,  # Number of shares to buy
+                side='buy',
+                order_type='market',
+                time_in_force='gtc'
+            )
+
+        print(f"Public order result: {response}")  # Debug log
+        return balance - (fractional * stock_price)
+    except Exception as e:
+        print(f"Failed to buy VOO on Public: {e}")
+        return 'x'
 
 def sell_all_shares_robinhood():
     tickers = read_tickers(robinhood_json_file_path)
@@ -147,66 +191,144 @@ def sell_all_shares_robinhood():
     tickers_to_remove = []
 
     if not tickers:
-        message = "No tickers to sell today. Checking again tomorrow."
-        result_messages.append(message)
-        return message
+        result_messages.append("No stocks are currently bought.")
+        return "\n".join(result_messages)
 
     for ticker in tickers:
         try:
             positions = r.build_holdings()
             if ticker in positions:
                 shares = float(positions[ticker]['quantity'])
-                message = f"Attempting to sell {shares} shares of {ticker}."
-                result_messages.append(message)
+                last_price = float(positions[ticker]['price'])
                 order_result = r.order_sell_market(ticker, shares, timeInForce='gfd')
-                result_messages.append(f"Order Result: {order_result}")
                 if order_result and order_result.get('id'):
-                    order_id = order_result['id']
-                    order_state = order_result['state']
-                    message = f"Sold {shares} shares of {ticker}. Order ID: {order_id}, State: {order_state}"
+                    message = f"Sold {shares} shares of {ticker} at ${last_price}."
                     result_messages.append(message)
                     tickers_to_remove.append(ticker)
                 else:
                     raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_result}")
             else:
-                message = f"{ticker} is not in the account. Checking again tomorrow."
+                message = f"{ticker} not in account, checking again tomorrow."
                 result_messages.append(message)
         except Exception as e:
-            error_message = f"Failed to sell shares of {ticker}: {e}"
+            error_message = f"Failed to sell shares of {ticker} on Robinhood: {e}"
             result_messages.append(error_message)
     
-    # Update the tickers list to remove only successfully sold tickers
     remaining_tickers = [ticker for ticker in tickers if ticker not in tickers_to_remove]
     write_tickers(robinhood_json_file_path, remaining_tickers)
 
     if not result_messages:
-        result_messages.append("No shares were sold.")
+        result_messages.append("No stocks are currently bought.")
     
-    final_message = "\n".join(result_messages)
-    return final_message
+    return "\n".join(result_messages)
+
+def sell_all_shares_public():
+    try:
+        tickers = read_tickers(public_json_file_path)
+        result_messages = []
+        tickers_to_remove = []
+
+        if not tickers:
+            result_messages.append("No stocks are currently bought.")
+            return "\n".join(result_messages)
+
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+
+        for ticker in tickers:
+            try:
+                positions = public.get_positions()
+                if ticker in positions:
+                    shares = float(positions[ticker]['quantity'])
+                    last_price = public.get_symbol_price(ticker)
+                    order_result = public.place_order(
+                        symbol=ticker,
+                        quantity=shares,
+                        side='sell',
+                        order_type='market',
+                        time_in_force='gfd'
+                    )
+                    if order_result.get('orderId'):
+                        message = f"Sold {shares} shares of {ticker} at ${last_price}."
+                        result_messages.append(message)
+                        tickers_to_remove.append(ticker)
+                    else:
+                        raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_result}")
+                else:
+                    message = f"{ticker} not in account, checking again tomorrow."
+                    result_messages.append(message)
+            except Exception as e:
+                error_message = f"Failed to sell shares of {ticker} on Public: {e}"
+                result_messages.append(error_message)
+        
+        remaining_tickers = [ticker for ticker in tickers if ticker not in tickers_to_remove]
+        write_tickers(public_json_file_path, remaining_tickers)
+
+        if not result_messages:
+            result_messages.append("No stocks are currently bought.")
+        
+        return "\n".join(result_messages)
+    except Exception as e:
+        return f"Failed to process Public shares: {e}"
 
 async def sell_all_shares_discord():
-    result_message = sell_all_shares_robinhood()
+    robinhood_message = sell_all_shares_robinhood()
+    public_message = sell_all_shares_public()
     sell_channel = bot.get_channel(sell_channel_id)
-    await sell_channel.send(result_message)
-    print(result_message)
+    final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}"
+    if len(final_message) > 4000:
+        await sell_channel.send("The message is too long to be displayed.")
+    else:
+        await sell_channel.send(final_message)
+    print(final_message)
 
 async def buy_VOO():
-    balance = get_cash_balance()
-    buy_stock_robinhood_VOO(balance)
-    message_text = f"Bought Daily VOO Shares with Arb Money. Balance: ${balance}"
+    robinhood_balance = None
+    public_balance = None
+
+    try:
+        robinhood_balance = buy_VOO_robinhood()
+    except Exception as e:
+        print(f"Failed to buy VOO on Robinhood: {e}")
+        robinhood_balance = 'x'
+
+    try:
+        public_balance = buy_VOO_public()
+    except Exception as e:
+        print(f"Failed to buy VOO on Public: {e}")
+        public_balance = 'x'
+    
+    message_text = (
+        f"Robinhood: Bought Daily VOO Shares with Arb Money. Balance: ${robinhood_balance}\n"
+        f"Public: Bought Daily VOO Shares with Arb Money. Balance: ${public_balance}"
+    )
+    
     output_channel = bot.get_channel(alerts_channel_id)
     await output_channel.send(message_text)
     print(message_text)
 
-def get_cash_balance():
-    account_info = r.profiles.load_account_profile()
-    cash_balance = account_info.get("cash", "N/A")
-    return cash_balance
+def get_cash_balance_robinhood():
+    try:
+        account_info = r.profiles.load_account_profile()
+        cash_balance = account_info.get("cash", "N/A")
+        return cash_balance
+    except Exception as e:
+        print(f"Failed to get cash balance from Robinhood: {e}")
+        return 'x'
+
+def get_cash_balance_public(public_instance):
+    try:
+        account_info = public_instance.get_portfolio()
+        if account_info is None:
+            return None
+        return account_info["equity"]["cash"]
+    except Exception as e:
+        print(f"Failed to get cash balance from Public: {e}")
+        return 'x'
 
 async def send_order_message(channel, ticker, robinhood_result, public_result):
-    robinhood_status = "✅" if 'id' in robinhood_result else "❌"
-    public_status = "✅" if public_result.get('success', False) else "❌"
+    robinhood_status = "✅" if robinhood_result and 'id' in robinhood_result else f"❌ Robinhood: {robinhood_result.get('detail', 'Unknown error') if robinhood_result else 'Unknown error'}"
+    public_status = "✅" if public_result and public_result.get('success', False) else f"❌ Public: {public_result.get('detail', 'Unknown error') if public_result else 'Unknown error'}"
     
     message_text = (
         f"Order for {ticker}:\n"
