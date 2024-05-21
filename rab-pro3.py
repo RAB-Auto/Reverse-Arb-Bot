@@ -11,13 +11,12 @@ import time
 from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
-import requests
 
 load_dotenv()
 
 # Define the file paths for credentials and JSON files
-robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt' #change to your robinhood password path
-public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt' #change to your public password path
+robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
+public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 
@@ -26,8 +25,6 @@ robinhood_email = None
 robinhood_password = None
 public_username = None
 public_password = None
-
-ALPHA_VANTAGE_API_KEY = os.getenv('ALPHA_VANTAGE_API_KEY')
 
 # Initialize Discord bot with intents
 intents = discord.Intents.all()
@@ -66,22 +63,6 @@ def write_tickers(file_path, tickers):
     with open(file_path, 'w') as file:
         json.dump(tickers, file)
 
-def is_market_open():
-    try:
-        # Alpha Vantage endpoint for checking market status
-        url = f"https://www.alphavantage.co/query?function=MARKET_STATUS&apikey={ALPHA_VANTAGE_API_KEY}"
-        response = requests.get(url)
-        data = response.json()
-        market_status = data.get("market_status", {}).get("status")
-
-        if market_status == "open":
-            return True
-        else:
-            return False
-    except Exception as e:
-        print(f"Failed to check market status: {e}")
-        return False
-
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user}')
@@ -105,8 +86,7 @@ async def on_ready():
         print(message)
         await bot.get_channel(alerts_channel_id).send(message)
     
-    await schedule_daily_sell()
-    await schedule_daily_VOO()
+    asyncio.create_task(schedule_tasks())
 
 @bot.event
 async def on_message(message):
@@ -265,7 +245,7 @@ def sell_all_shares_public():
                         quantity=shares,
                         side='sell',
                         order_type='market',
-                        time_in_force='gfd'
+                        time_in_force='gtc'
                     )
                     if order_result.get('orderId'):
                         message = f"Sold {shares} shares of {ticker} at ${last_price}."
@@ -357,31 +337,14 @@ async def send_order_message(channel, ticker, robinhood_result, public_result):
     await channel.send(message_text)
     print(message_text)
 
-async def schedule_daily_sell():
+# Schedule daily sell at 8:45 AM CST on weekdays
+async def schedule_tasks():
     if datetime.today().weekday() < 5:
-        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(check_and_sell()))
-        while True:
-            schedule.run_pending()
-            await asyncio.sleep(1)
-
-async def schedule_daily_VOO():
-    if datetime.today().weekday() < 5:
-        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(check_and_buy_VOO()))
-        while True:
-            schedule.run_pending()
-            await asyncio.sleep(1)
-
-async def check_and_sell():
-    if is_market_open():
-        await sell_all_shares_discord()
-    else:
-        print("Market is closed. Skipping sell operation.")
-
-async def check_and_buy_VOO():
-    if is_market_open():
-        await buy_VOO()
-    else:
-        print("Market is closed. Skipping buy operation.")
+        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
+    while True:
+        schedule.run_pending()
+        await asyncio.sleep(1)
 
 async def main():
     await bot.start(discord_token)
