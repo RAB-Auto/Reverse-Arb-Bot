@@ -19,6 +19,7 @@ robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
 public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
+holidays_json_file_path = 'market_holidays.json' # all 2024-2026 holdays are there (last updated: 05/20/2024)
 
 # Initialize variables for credentials
 robinhood_email = None
@@ -62,6 +63,18 @@ def read_tickers(file_path):
 def write_tickers(file_path, tickers):
     with open(file_path, 'w') as file:
         json.dump(tickers, file)
+
+# Function to read holidays from JSON file
+def read_holidays(file_path):
+    if os.path.exists(file_path):
+        with open(file_path, 'r') as file:
+            return json.load(file)
+    return []
+
+# Function to check if today is a holiday
+def is_today_holiday(holidays):
+    today = datetime.today().strftime('%Y-%m-%d')
+    return today in holidays
 
 @bot.event
 async def on_ready():
@@ -144,11 +157,14 @@ def buy_stock_public(ticker):
 
 def buy_VOO_robinhood():
     try:
-        balance = float(get_cash_balance_robinhood())
-        purchase_balance = balance - 5.0
+        buying_power = float(get_buying_power_robinhood())
+        purchase_balance = buying_power - 5.0
+        if purchase_balance < 1:
+            return 'x'
         ticker = "VOO"
-        r.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
-        return balance - purchase_balance
+        order_result = r.orders.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
+        print(f"Order result: {order_result}")  # Debug log
+        return buying_power - purchase_balance
     except Exception as e:
         print(f"Failed to buy VOO on Robinhood: {e}")
         return 'x'
@@ -234,11 +250,16 @@ def sell_all_shares_public():
         public = Public()
         public.login(username=public_username, password=public_password, wait_for_2fa=True)
 
+        # Fetch positions and print them for debugging
+        positions = public.get_positions()
+        print("Positions:", positions)  # Debug statement to print the positions
+
         for ticker in tickers:
             try:
-                positions = public.get_positions()
-                if ticker in positions:
-                    shares = float(positions[ticker]['quantity'])
+                # Check if the ticker exists in the positions
+                if any(position['instrument']['symbol'] == ticker for position in positions):
+                    position = next(position for position in positions if position['instrument']['symbol'] == ticker)
+                    shares = float(position['quantity'])
                     last_price = public.get_symbol_price(ticker)
                     order_result = public.place_order(
                         symbol=ticker,
@@ -306,13 +327,13 @@ async def buy_VOO():
     await output_channel.send(message_text)
     print(message_text)
 
-def get_cash_balance_robinhood():
+def get_buying_power_robinhood():
     try:
         account_info = r.profiles.load_account_profile()
-        cash_balance = account_info.get("cash", "N/A")
-        return cash_balance
+        buying_power = account_info.get("buying_power", "N/A")
+        return buying_power
     except Exception as e:
-        print(f"Failed to get cash balance from Robinhood: {e}")
+        print(f"Failed to get buying power from Robinhood: {e}")
         return 'x'
 
 def get_cash_balance_public(public_instance):
@@ -337,11 +358,15 @@ async def send_order_message(channel, ticker, robinhood_result, public_result):
     await channel.send(message_text)
     print(message_text)
 
-# Schedule daily sell at 8:45 AM CST on weekdays
+# Schedule tasks, sell at 8:45 AM CST on weekdays and buy VOO at 9:00 AM CST on weekdays
 async def schedule_tasks():
+    holidays = read_holidays(holidays_json_file_path)
     if datetime.today().weekday() < 5:
-        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
+        if is_today_holiday(holidays):
+            await bot.get_channel(sell_channel_id).send("No trades for today: market holiday")
+        else:
+            schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+            schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
