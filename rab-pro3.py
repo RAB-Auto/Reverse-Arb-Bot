@@ -292,6 +292,12 @@ def sell_all_shares_public():
         return f"Failed to process Public shares: {e}"
 
 async def sell_all_shares_discord():
+    holidays = read_holidays(holidays_json_file_path)
+    if is_today_holiday(holidays):
+        await bot.get_channel(sell_channel_id).send("No sell trades for today: market holiday")
+        print("No sell trades for today: market holiday")
+        return
+
     robinhood_message = sell_all_shares_robinhood()
     public_message = sell_all_shares_public()
     sell_channel = bot.get_channel(sell_channel_id)
@@ -303,6 +309,12 @@ async def sell_all_shares_discord():
     print(final_message)
 
 async def buy_VOO():
+    holidays = read_holidays(holidays_json_file_path)
+    if is_today_holiday(holidays):
+        await bot.get_channel(alerts_channel_id).send("No buy trades for today: market holiday")
+        print("No buy trades for today: market holiday")
+        return
+
     robinhood_balance = None
     public_balance = None
 
@@ -360,13 +372,9 @@ async def send_order_message(channel, ticker, robinhood_result, public_result):
 
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VOO at 9:00 AM CST on weekdays
 async def schedule_tasks():
-    holidays = read_holidays(holidays_json_file_path)
     if datetime.today().weekday() < 5:
-        if is_today_holiday(holidays):
-            await bot.get_channel(sell_channel_id).send("No trades for today: market holiday")
-        else:
-            schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-            schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
+        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
