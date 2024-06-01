@@ -1,7 +1,8 @@
 robin_stocks
-dotenv
-discord.py
-schedule
 public-invest-api
+webull
 yfinance
+discord.py
+dotenv
+schedule
 requests
