@@ -14,6 +14,7 @@ import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
+wb = webull()
 
 # Define the file paths for credentials and JSON files
 robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
@@ -21,6 +22,7 @@ public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt'
 webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/WebullPass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
+webull_json_file_path = 'currentArbsWebull.json'
 holidays_json_file_path = 'market_holidays.json' # all 2024-2026 holdays are there (last updated: 05/20/2024)
 
 # Initialize variables for credentials
@@ -30,6 +32,7 @@ public_username = None
 public_password = None
 webull_number = None
 webull_password = None
+webull_trade_token = None
 
 # Initialize Discord bot with intents
 intents = discord.Intents.all()
@@ -61,8 +64,9 @@ try:
     with open(webull_file_path, 'r') as file:
         webull_number = file.readline().strip()
         webull_password = file.readline().strip()
+        webull_trade_token = file.readline().strip()
 except Exception as e:
-    print(f"Failed to read Webull credentials file: {e}")
+    print(f"Failed to read Robinhood credentials file: {e}")
 
 # Function to read tickers from JSON file
 def read_tickers(file_path):
@@ -96,23 +100,19 @@ async def on_ready():
     login_message = []
     try:
         r.login(robinhood_email, robinhood_password)
-        login_message.append("Logged in successfully to RobinHood!")
+        login_message.append("✅ Logged in successfully to RobinHood!")
     except Exception as e:
-        login_message.append(f"RobinHood login failed: {e}")
+        login_message.append(f"❌ RobinHood login failed: {e}")
 
     try:
         public = Public()
         public.login(username=public_username, password=public_password, wait_for_2fa=True)
-        login_message.append("Logged in successfully to Public!")
+        login_message.append("✅ Logged in successfully to Public!")
     except Exception as e:
-        login_message.append(f"Public login failed: {e}")
+        login_message.append(f"❌ Public login failed: {e}")
 
     try:
         wb = webull()
-<<<<<<< Updated upstream
-        wb.login(webull_email, webull_password)
-        login_message.append("Logged in successfully to Webull!")
-=======
         wb.login(webull_number, webull_password)
         login_result = wb.login(webull_number, webull_password)
         
@@ -120,9 +120,8 @@ async def on_ready():
             login_message.append("✅ Logged in successfully to Webull!")
         else:
             login_message.append("❌ Webull login failed: Access token not found in the response.")
->>>>>>> Stashed changes
     except Exception as e:
-        login_message.append(f"Webull login failed: {e}")
+        login_message.append(f"❌ Webull login failed: {e}")
 
     for message in login_message:
         print(message)
@@ -137,6 +136,7 @@ async def on_message(message):
         print(f"Processing ticker: {ticker}")
         robinhood_result = None
         public_result = None
+        webull_result = None
         try:
             robinhood_result = buy_stock_robinhood(ticker)
         except Exception as e:
@@ -145,7 +145,12 @@ async def on_message(message):
             public_result = buy_stock_public(ticker)
         except Exception as e:
             print(f"Failed to place order for {ticker} on Public: {e}")
-        await send_order_message(message.channel, ticker, robinhood_result, public_result)
+        try:
+            webull_result = buy_stock_webull(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Webull: {e}")
+
+        await send_order_message(message.channel, ticker, robinhood_result, public_result, webull_result)
 
 def get_stock_price(symbol: str):
     stock = yf.Ticker(symbol)
@@ -160,9 +165,10 @@ def get_stock_price(symbol: str):
 def buy_stock_robinhood(ticker):
     order_result = r.order_buy_market(ticker, 1)
     print(f"Robinhood order result: {order_result}")  # Debug log
-    tickers = read_tickers(robinhood_json_file_path)
-    tickers.append(ticker)
-    write_tickers(robinhood_json_file_path, tickers)
+    if 'id' in order_result:
+        tickers = read_tickers(robinhood_json_file_path)
+        tickers.append(ticker)
+        write_tickers(robinhood_json_file_path, tickers)
     return order_result
 
 def buy_stock_public(ticker):
@@ -171,21 +177,6 @@ def buy_stock_public(ticker):
     public.login(username=public_username, password=public_password, wait_for_2fa=True)
     
     # Place a market buy order
-<<<<<<< Updated upstream
-    response = public.place_order(
-        symbol=ticker,
-        quantity=1,  # Number of shares to buy
-        side='buy',
-        order_type='market',  # Market order
-        time_in_force='gtc'  # Good 'til canceled
-    )
-    print(f"Public order result: {response}")  # Debug log
-    tickers = read_tickers(public_json_file_path)
-    tickers.append(ticker)
-    write_tickers(public_json_file_path, tickers)
-    return response
-
-=======
     try:
         response = public.place_order(
             symbol=ticker,
@@ -250,7 +241,6 @@ async def send_order_message(channel, ticker, robinhood_result, public_result, w
     await channel.send(message_text)
     print(message_text)
 
->>>>>>> Stashed changes
 def buy_VOO_robinhood():
     try:
         buying_power = float(get_buying_power_robinhood())
@@ -453,18 +443,6 @@ def get_cash_balance_public(public_instance):
     except Exception as e:
         print(f"Failed to get cash balance from Public: {e}")
         return 'x'
-
-async def send_order_message(channel, ticker, robinhood_result, public_result):
-    robinhood_status = "✅" if robinhood_result and 'id' in robinhood_result else f"❌ Robinhood: {robinhood_result.get('detail', 'Unknown error') if robinhood_result else 'Unknown error'}"
-    public_status = "✅" if public_result and public_result.get('success', False) else f"❌ Public: {public_result.get('detail', 'Unknown error') if public_result else 'Unknown error'}"
-    
-    message_text = (
-        f"Order for {ticker}:\n"
-        f"Robinhood: {robinhood_status}\n"
-        f"Public: {public_status}"
-    )
-    await channel.send(message_text)
-    print(message_text)
 
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VOO at 9:00 AM CST on weekdays
 async def schedule_tasks():
