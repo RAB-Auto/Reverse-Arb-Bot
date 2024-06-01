@@ -28,7 +28,7 @@ robinhood_email = None
 robinhood_password = None
 public_username = None
 public_password = None
-webull_email = None
+webull_number = None
 webull_password = None
 
 # Initialize Discord bot with intents
@@ -59,7 +59,7 @@ except Exception as e:
 # Read Webull credentials from file
 try:
     with open(webull_file_path, 'r') as file:
-        webull_email = file.readline().strip()
+        webull_number = file.readline().strip()
         webull_password = file.readline().strip()
 except Exception as e:
     print(f"Failed to read Webull credentials file: {e}")
@@ -109,8 +109,18 @@ async def on_ready():
 
     try:
         wb = webull()
+<<<<<<< Updated upstream
         wb.login(webull_email, webull_password)
         login_message.append("Logged in successfully to Webull!")
+=======
+        wb.login(webull_number, webull_password)
+        login_result = wb.login(webull_number, webull_password)
+        
+        if 'accessToken' in login_result:
+            login_message.append("✅ Logged in successfully to Webull!")
+        else:
+            login_message.append("❌ Webull login failed: Access token not found in the response.")
+>>>>>>> Stashed changes
     except Exception as e:
         login_message.append(f"Webull login failed: {e}")
 
@@ -161,6 +171,7 @@ def buy_stock_public(ticker):
     public.login(username=public_username, password=public_password, wait_for_2fa=True)
     
     # Place a market buy order
+<<<<<<< Updated upstream
     response = public.place_order(
         symbol=ticker,
         quantity=1,  # Number of shares to buy
@@ -174,6 +185,72 @@ def buy_stock_public(ticker):
     write_tickers(public_json_file_path, tickers)
     return response
 
+=======
+    try:
+        response = public.place_order(
+            symbol=ticker,
+            quantity=1,  # Number of shares to buy
+            side='buy',
+            order_type='market',  # Market order
+            time_in_force='gtc'  # Good 'til canceled
+        )
+        print(f"Public order result: {response}")  # Debug log
+        if response.get('success', False):
+            tickers = read_tickers(public_json_file_path)
+            tickers.append(ticker)
+            write_tickers(public_json_file_path, tickers)
+        return response
+    except Exception as e:
+        error_message = str(e)
+        if 'message' in error_message:
+            try:
+                error_message = eval(error_message).get('message', str(e))
+            except:
+                pass
+        return {"success": False, "detail": error_message}
+
+def buy_stock_webull(ticker):
+    wb = webull()
+    wb.login(webull_number, webull_password)
+    wb.get_trade_token(webull_trade_token)  # Ensure the trade token is obtained once
+    price = float(get_stock_price(symbol=ticker))
+    try:
+        if price <= 0.99:
+            if price <= 0.1:
+                order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=1000, price=price)
+                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="LMT", quant=900, price=price)
+            else:
+                order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=100, price=price)
+                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="LMT", quant=99, price=price)
+        else:
+            order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=1, price=price)
+        print(f"Webull buy order result for {ticker}: {order_result_buy}")
+
+        if 'success' in order_result_buy and order_result_buy['success']:
+            tickers = read_tickers(webull_json_file_path)
+            tickers.append(ticker)
+            write_tickers(webull_json_file_path, tickers)
+        return order_result_buy
+
+    except Exception as e:
+        print(f"Webull order error for {ticker}: {e}")
+        return {"success": False, "detail": str(e)}
+
+async def send_order_message(channel, ticker, robinhood_result, public_result, webull_result):
+    robinhood_status = "✅" if robinhood_result and 'id' in robinhood_result else f"❌ Robinhood: {robinhood_result.get('detail', 'Unknown error') if robinhood_result else 'Unknown error'}"
+    public_status = "✅" if public_result and public_result.get('success', False) else f"❌ Public: {public_result.get('message', public_result.get('detail', 'Unknown error')) if public_result else 'Unknown error'}"
+    webull_status = "✅" if webull_result and webull_result.get('success', False) else f"❌ Webull: {webull_result.get('msg', 'Unknown error') if webull_result else 'Unknown error'}"
+
+    message_text = (
+        f"Order for {ticker}:\n"
+        f"Robinhood: {robinhood_status}\n"
+        f"Public: {public_status}\n"
+        f"Webull: {webull_status}"
+    )
+    await channel.send(message_text)
+    print(message_text)
+
+>>>>>>> Stashed changes
 def buy_VOO_robinhood():
     try:
         buying_power = float(get_buying_power_robinhood())
