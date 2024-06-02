@@ -17,9 +17,9 @@ load_dotenv()
 wb = webull()
 
 # Define the file paths for credentials and JSON files
-robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
-public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt'
-webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/WebullPass.txt'
+robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/RobinPass.txt'
+public_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/PublicPass.txt'
+webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/WebullPass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 webull_json_file_path = 'currentArbsWebull.json'
@@ -203,7 +203,7 @@ def buy_stock_public(ticker):
 def buy_stock_webull(ticker):
     wb = webull()
     wb.login(webull_number, webull_password)
-    wb.get_trade_token(webull_trade_token)  # Ensure the trade token is obtained once
+    wb.get_trade_token(webull_trade_token)
     price = float(get_stock_price(symbol=ticker))
     try:
         if price <= 0.99:
@@ -377,6 +377,51 @@ def sell_all_shares_public():
     except Exception as e:
         return f"Failed to process Public shares: {e}"
 
+def sell_all_shares_webull():
+    try:
+        tickers = read_tickers(webull_json_file_path)
+        result_messages = []
+        tickers_to_remove = []
+
+        if not tickers:
+            result_messages.append("No stocks are currently bought.")
+            return "\n".join(result_messages)
+
+        wb = webull()
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+
+        for ticker in tickers:
+            try:
+                positions = wb.get_positions()
+                if any(position['ticker']['symbol'] == ticker for position in positions):
+                    position = next(position for position in positions if position['ticker']['symbol'] == ticker)
+                    shares = int(position['position'])
+                    last_price = float(position['lastPrice'])
+                    order_result = wb.place_order(action="SELL", stock=ticker, orderType="MKT", quant=shares, enforce="DAY")
+                    if 'success' in order_result and order_result['success']:
+                        message = f"Sold {shares} shares of {ticker} at ${last_price}."
+                        result_messages.append(message)
+                        tickers_to_remove.append(ticker)
+                    else:
+                        raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_result}")
+                else:
+                    message = f"{ticker} not in account, checking again tomorrow."
+                    result_messages.append(message)
+            except Exception as e:
+                error_message = f"Failed to sell shares of {ticker} on Webull: {e}"
+                result_messages.append(error_message)
+        
+        remaining_tickers = [ticker for ticker in tickers if ticker not in tickers_to_remove]
+        write_tickers(webull_json_file_path, remaining_tickers)
+
+        if not result_messages:
+            result_messages.append("No stocks are currently bought.")
+        
+        return "\n".join(result_messages)
+    except Exception as e:
+        return f"Failed to process Webull shares: {e}"
+
 async def sell_all_shares_discord():
     holidays = read_holidays(holidays_json_file_path)
     if is_today_holiday(holidays):
@@ -386,8 +431,9 @@ async def sell_all_shares_discord():
 
     robinhood_message = sell_all_shares_robinhood()
     public_message = sell_all_shares_public()
+    webull_message = sell_all_shares_webull()
     sell_channel = bot.get_channel(sell_channel_id)
-    final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}"
+    final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}\n\nWebull:\n{webull_message}"
     if len(final_message) > 4000:
         await sell_channel.send("The message is too long to be displayed.")
     else:
