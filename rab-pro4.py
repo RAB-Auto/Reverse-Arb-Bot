@@ -17,9 +17,9 @@ load_dotenv()
 wb = webull()
 
 # Define the file paths for credentials and JSON files
-robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RobinPass.txt'
-public_file_path = 'C:/Users/arnav/OneDrive/Desktop/PublicPass.txt'
-webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/WebullPass.txt'
+robinhood_file_path = '/Users/karthikkurapati/Desktop/Credentials/robinpass.txt'
+public_file_path = '/Users/karthikkurapati/Desktop/Credentials/publicpass.txt'
+webull_file_path = '/Users/karthikkurapati/Desktop/Credentials/webullpass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 webull_json_file_path = 'currentArbsWebull.json'
@@ -197,9 +197,11 @@ def buy_stock_webull(ticker):
         if price <= 0.99:
             if price <= 0.1:
                 order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=1000, price=price)
-                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="LMT", quant=900, price=price)
+                time.sleep(15)
+                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="LMT", quant=999, price=price)
             else:
                 order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=100, price=price)
+                time.sleep(15)
                 order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="LMT", quant=99, price=price)
         else:
             order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=1, price=price)
@@ -266,6 +268,7 @@ def buy_VOO_public():
     except Exception as e:
         print(f"Failed to buy VOO on Public: {e}")
         return 'x'
+    
 
 def sell_all_shares_robinhood():
     tickers = read_tickers(robinhood_json_file_path)
