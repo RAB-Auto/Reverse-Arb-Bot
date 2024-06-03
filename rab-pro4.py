@@ -17,9 +17,9 @@ load_dotenv()
 wb = webull()
 
 # Define the file paths for credentials and JSON files
-robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/RobinPass.txt'
-public_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/PublicPass.txt'
-webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/WebullPass.txt'
+robinhood_file_path = '/Users/karthikkurapati/Desktop/Credentials/robinpass.txt'
+public_file_path = '/Users/karthikkurapati/Desktop/Credentials/publicpass.txt'
+webull_file_path = '/Users/karthikkurapati/Desktop/Credentials/webullpass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 webull_json_file_path = 'currentArbsWebull.json'
@@ -112,7 +112,6 @@ async def on_ready():
         login_message.append(f"❌ Public login failed: {e}")
 
     try:
-        wb = webull()
         wb.login(webull_number, webull_password)
         login_result = wb.login(webull_number, webull_password)
         
@@ -201,7 +200,6 @@ def buy_stock_public(ticker):
         return {"success": False, "detail": error_message}
 
 def buy_stock_webull(ticker):
-    wb = webull()
     wb.login(webull_number, webull_password)
     wb.get_trade_token(webull_trade_token)
     price = float(get_stock_price(symbol=ticker))
@@ -209,10 +207,10 @@ def buy_stock_webull(ticker):
         if price <= 0.99:
             if price <= 0.1:
                 order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=1000, price=price)
-                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="LMT", quant=900, price=price)
+                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="MKT", quant=999, price=price)
             else:
                 order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=100, price=price)
-                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="LMT", quant=99, price=price)
+                order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="MKT", quant=99, price=price)
         else:
             order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="LMT", quant=1, price=price)
         print(f"Webull buy order result for {ticker}: {order_result_buy}")
@@ -284,6 +282,26 @@ def buy_VOO_public():
         return balance - (fractional * stock_price)
     except Exception as e:
         print(f"Failed to buy VOO on Public: {e}")
+        return 'x'
+
+def buy_SCHG_webull():
+    try:
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+
+        balance = float(get_cash_balance_webull())
+        value_SCHG = get_stock_price("SCHG")
+        money_for_SCHG = balance - value_SCHG
+        money_needed_for_SCHG = money_for_SCHG - 200
+        if(money_needed_for_SCHG <= 1):
+            return "fail correctly"
+        else:
+            response = wb.place_order(stock = "SCHG", action = "BUY", orderType="MKT", quant=1, enforce="DAY")
+        print(f"Public order result: {response}")  # Debug log
+        new_balance = float(get_cash_balance_webull())
+        return new_balance
+    except Exception as e:
+        print(f"Failed to buy VOO on Webull: {e}")
         return 'x'
 
 def sell_all_shares_robinhood():
@@ -387,7 +405,6 @@ def sell_all_shares_webull():
             result_messages.append("No stocks are currently bought.")
             return "\n".join(result_messages)
 
-        wb = webull()
         wb.login(webull_number, webull_password)
         wb.get_trade_token(webull_trade_token)
 
@@ -447,24 +464,31 @@ async def buy_VOO():
         print("No buy trades for today: market holiday")
         return
 
-    robinhood_balance = None
+    # robinhood_balance = None
     public_balance = None
 
-    try:
-        robinhood_balance = buy_VOO_robinhood()
-    except Exception as e:
-        print(f"Failed to buy VOO on Robinhood: {e}")
-        robinhood_balance = 'x'
+    # try:
+    #     robinhood_balance = buy_VOO_robinhood()
+    # except Exception as e:
+    #     print(f"Failed to buy VOO on Robinhood: {e}")
+    #     robinhood_balance = 'x'
 
     try:
         public_balance = buy_VOO_public()
     except Exception as e:
         print(f"Failed to buy VOO on Public: {e}")
         public_balance = 'x'
+
+    try:
+        webull_balance = buy_SCHG_webull()
+    except Exception as e:
+        print(f"Failed to buy SCHG on Webull: {e}")
+        webull_balance = 'x'
     
     message_text = (
-        f"Robinhood: Bought Daily VOO Shares with Arb Money. Balance: ${robinhood_balance}\n"
-        f"Public: Bought Daily VOO Shares with Arb Money. Balance: ${public_balance}"
+        # f"Robinhood: Bought Daily VOO Shares with Arb Money. Balance: ${robinhood_balance}\n"
+        f"Public: Bought Daily VOO Shares with Arb Money. Balance: ${public_balance}\n"
+        f"Webull: Bought Daily SCHG Shares with Arb Money. Balance: ${webull_balance}"
     )
     
     output_channel = bot.get_channel(alerts_channel_id)
@@ -490,11 +514,22 @@ def get_cash_balance_public(public_instance):
         print(f"Failed to get cash balance from Public: {e}")
         return 'x'
 
+def get_cash_balance_webull():
+    try:
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+        account = wb.get_account()
+        day_buying_power = next(item['value'] for item in account['accountMembers'] if item['key'] == 'dayBuyingPower')
+        return day_buying_power
+    except Exception as e:
+        print(f"Failed to get cash balance from Webull: {e}")
+        return 'x'
+
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VOO at 9:00 AM CST on weekdays
 async def schedule_tasks():
     if datetime.today().weekday() < 5:
-        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
+        schedule.every().day.at("09:17").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+        schedule.every().day.at("09:18").do(lambda: asyncio.create_task(buy_VOO()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
