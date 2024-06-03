@@ -246,21 +246,21 @@ async def send_order_message(channel, ticker, robinhood_result, public_result, w
     await channel.send(message_text)
     print(message_text)
 
-def buy_VOO_robinhood():
+def buy_VUG_robinhood():
     try:
         buying_power = float(get_buying_power_robinhood())
         purchase_balance = buying_power - 5.0
         if purchase_balance < 1:
             return 'x'
-        ticker = "VOO"
+        ticker = "VUG"
         order_result = r.orders.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
         print(f"Order result: {order_result}")  # Debug log
         return buying_power - purchase_balance
     except Exception as e:
-        print(f"Failed to buy VOO on Robinhood: {e}")
+        print(f"Failed to buy VUG on Robinhood: {e}")
         return 'x'
 
-def buy_VOO_public():
+def buy_VUG_public():
     try:
         public_instance = Public()
         public_instance.login(username=public_username, password=public_password, wait_for_2fa=True)
@@ -269,7 +269,7 @@ def buy_VOO_public():
         if (balance - 5.0 < 1):
             return 'x'
         else:
-            stock_price = get_stock_price('VOO')
+            stock_price = get_stock_price('VUG')
             if stock_price is None:
                 print("Failed to get stock price")
                 return 'x'
@@ -278,7 +278,7 @@ def buy_VOO_public():
             fractional = math.floor(fractional * 10000) / 10000  # Keep up to 4 decimal places
 
             response = public_instance.place_order(
-                symbol='VOO',
+                symbol='VUG',
                 quantity=fractional,  # Number of shares to buy
                 side='buy',
                 order_type='market',
@@ -288,7 +288,7 @@ def buy_VOO_public():
         print(f"Public order result: {response}")  # Debug log
         return balance - (fractional * stock_price)
     except Exception as e:
-        print(f"Failed to buy VOO on Public: {e}")
+        print(f"Failed to buy VUG on Public: {e}")
         return 'x'
 
 def buy_SCHG_webull():
@@ -308,7 +308,7 @@ def buy_SCHG_webull():
         new_balance = float(get_cash_balance_webull())
         return new_balance
     except Exception as e:
-        print(f"Failed to buy VOO on Webull: {e}")
+        print(f"Failed to buy VUG on Webull: {e}")
         return 'x'
 
 def sell_all_shares_robinhood():
@@ -464,7 +464,7 @@ async def sell_all_shares_discord():
         await sell_channel.send(final_message)
     print(final_message)
 
-async def buy_VOO():
+async def buy_VUG():
     holidays = read_holidays(holidays_json_file_path)
     if is_today_holiday(holidays):
         await bot.get_channel(alerts_channel_id).send("No buy trades for today: market holiday")
@@ -476,15 +476,15 @@ async def buy_VOO():
     webull_balance = None
 
     try:
-        robinhood_balance = buy_VOO_robinhood()
+        robinhood_balance = buy_VUG_robinhood()
     except Exception as e:
-        print(f"Failed to buy VOO on Robinhood: {e}")
+        print(f"Failed to buy VUG on Robinhood: {e}")
         robinhood_balance = 'x'
 
     try:
-        public_balance = buy_VOO_public()
+        public_balance = buy_VUG_public()
     except Exception as e:
-        print(f"Failed to buy VOO on Public: {e}")
+        print(f"Failed to buy VUG on Public: {e}")
         public_balance = 'x'
 
     try:
@@ -494,8 +494,8 @@ async def buy_VOO():
         webull_balance = 'x'
     
     message_text = (
-        f"Robinhood: Bought Daily VOO Shares with Arb Money. Balance: ${robinhood_balance}\n"
-        f"Public: Bought Daily VOO Shares with Arb Money. Balance: ${public_balance}\n"
+        f"Robinhood: Bought Daily VUG Shares with Arb Money. Balance: ${robinhood_balance}\n"
+        f"Public: Bought Daily VUG Shares with Arb Money. Balance: ${public_balance}\n"
         f"Webull: Bought Daily SCHG Shares with Arb Money. Balance: ${webull_balance}"
     )
     
@@ -533,11 +533,11 @@ def get_cash_balance_webull():
         print(f"Failed to get cash balance from Webull: {e}")
         return 'x'
 
-# Schedule tasks, sell at 8:45 AM CST on weekdays and buy VOO at 9:00 AM CST on weekdays
+# Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
     if datetime.today().weekday() < 5:
         schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VOO()))
+        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
