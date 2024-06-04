@@ -447,61 +447,67 @@ def sell_all_shares_webull():
         return f"Failed to process Webull shares: {e}"
 
 async def sell_all_shares_discord():
-    holidays = read_holidays(holidays_json_file_path)
-    if is_today_holiday(holidays):
-        await bot.get_channel(sell_channel_id).send("No sell trades for today: market holiday")
-        print("No sell trades for today: market holiday")
-        return
+    if datetime.today().weekday() < 5:
+        holidays = read_holidays(holidays_json_file_path)
+        if is_today_holiday(holidays):
+            await bot.get_channel(sell_channel_id).send("No sell trades for today: market holiday")
+            print("No sell trades for today: market holiday")
+            return
 
-    robinhood_message = sell_all_shares_robinhood()
-    public_message = sell_all_shares_public()
-    webull_message = sell_all_shares_webull()
-    sell_channel = bot.get_channel(sell_channel_id)
-    final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}\n\nWebull:\n{webull_message}"
-    if len(final_message) > 4000:
-        await sell_channel.send("The message is too long to be displayed.")
+        robinhood_message = sell_all_shares_robinhood()
+        public_message = sell_all_shares_public()
+        webull_message = sell_all_shares_webull()
+        sell_channel = bot.get_channel(sell_channel_id)
+        final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}\n\nWebull:\n{webull_message}"
+        if len(final_message) > 4000:
+            await sell_channel.send("The message is too long to be displayed.")
+        else:
+            await sell_channel.send(final_message)
+        print(final_message)
     else:
-        await sell_channel.send(final_message)
-    print(final_message)
+        return
 
 async def buy_VUG():
-    holidays = read_holidays(holidays_json_file_path)
-    if is_today_holiday(holidays):
-        await bot.get_channel(alerts_channel_id).send("No buy trades for today: market holiday")
-        print("No buy trades for today: market holiday")
+    if datetime.today().weekday() < 5:
+        holidays = read_holidays(holidays_json_file_path)
+        if is_today_holiday(holidays):
+            await bot.get_channel(alerts_channel_id).send("No buy trades for today: market holiday")
+            print("No buy trades for today: market holiday")
+            return
+
+        robinhood_balance = None
+        public_balance = None
+        webull_balance = None
+
+        try:
+            robinhood_balance = buy_VUG_robinhood()
+        except Exception as e:
+            print(f"Failed to buy VUG on Robinhood: {e}")
+            robinhood_balance = 'x'
+
+        try:
+            public_balance = buy_VUG_public()
+        except Exception as e:
+            print(f"Failed to buy VUG on Public: {e}")
+            public_balance = 'x'
+
+        try:
+            webull_balance = buy_SCHG_webull()
+        except Exception as e:
+            print(f"Failed to buy SCHG on Webull: {e}")
+            webull_balance = 'x'
+        
+        message_text = (
+            f"Robinhood: Bought Daily VUG Shares with Arb Money. Balance: ${robinhood_balance}\n"
+            f"Public: Bought Daily VUG Shares with Arb Money. Balance: ${public_balance}\n"
+            f"Webull: Bought Daily SCHG Shares with Arb Money. Balance: ${webull_balance}"
+        )
+        
+        output_channel = bot.get_channel(alerts_channel_id)
+        await output_channel.send(message_text)
+        print(message_text)
+    else:
         return
-
-    robinhood_balance = None
-    public_balance = None
-    webull_balance = None
-
-    try:
-        robinhood_balance = buy_VUG_robinhood()
-    except Exception as e:
-        print(f"Failed to buy VUG on Robinhood: {e}")
-        robinhood_balance = 'x'
-
-    try:
-        public_balance = buy_VUG_public()
-    except Exception as e:
-        print(f"Failed to buy VUG on Public: {e}")
-        public_balance = 'x'
-
-    try:
-        webull_balance = buy_SCHG_webull()
-    except Exception as e:
-        print(f"Failed to buy SCHG on Webull: {e}")
-        webull_balance = 'x'
-    
-    message_text = (
-        f"Robinhood: Bought Daily VUG Shares with Arb Money. Balance: ${robinhood_balance}\n"
-        f"Public: Bought Daily VUG Shares with Arb Money. Balance: ${public_balance}\n"
-        f"Webull: Bought Daily SCHG Shares with Arb Money. Balance: ${webull_balance}"
-    )
-    
-    output_channel = bot.get_channel(alerts_channel_id)
-    await output_channel.send(message_text)
-    print(message_text)
 
 def get_buying_power_robinhood():
     try:
@@ -535,9 +541,8 @@ def get_cash_balance_webull():
 
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
-    if datetime.today().weekday() < 5:
-        schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-        schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
+    schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+    schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
