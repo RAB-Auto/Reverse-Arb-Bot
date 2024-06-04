@@ -255,7 +255,8 @@ def buy_VUG_robinhood():
         ticker = "VUG"
         order_result = r.orders.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
         print(f"Order result: {order_result}")  # Debug log
-        return buying_power - purchase_balance
+        new_buying_power = float(get_buying_power_robinhood())
+        return new_buying_power
     except Exception as e:
         print(f"Failed to buy VUG on Robinhood: {e}")
         return 'x'
@@ -286,7 +287,8 @@ def buy_VUG_public():
             )
 
         print(f"Public order result: {response}")  # Debug log
-        return balance - (fractional * stock_price)
+        new_balance = float(get_cash_balance_public(public_instance))
+        return new_balance
     except Exception as e:
         print(f"Failed to buy VUG on Public: {e}")
         return 'x'
