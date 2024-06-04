@@ -301,7 +301,7 @@ def buy_SCHG_webull():
         money_for_SCHG = balance - value_SCHG
         money_needed_for_SCHG = money_for_SCHG - 200
         if(money_needed_for_SCHG <= 1):
-            return "fail correctly"
+            return "x"
         else:
             response = wb.place_order(stock = "SCHG", action = "BUY", orderType="MKT", quant=1, enforce="DAY")
         print(f"Public order result: {response}")  # Debug log
