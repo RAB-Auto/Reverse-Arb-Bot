@@ -268,8 +268,7 @@ def buy_stock_webull(ticker):
 def buy_stock_firstrade(ticker):
     ft_order = order.Order(ft_ss)
     ft_accounts = account.FTAccountData(ft_ss)
-    if len(ft_accounts.account_numbers) < 1:
-        raise Exception("No accounts found or an error occured exiting...")
+
     price = get_stock_price(ticker)
 
     # Place a market buy order
@@ -282,7 +281,7 @@ def buy_stock_firstrade(ticker):
             quantity=1,
             price=price,
             duration=order.Duration.DAY,
-            dry_run=True,
+            dry_run=False,
         )
         response = ft_order.order_confirmation
         print(f"Firstrade order result: {response}")  # Debug log
@@ -388,22 +387,32 @@ def buy_SCHG_webull():
 def buy_VUG_firstrade():
     try:
         buying_power = float(get_buying_power_firstrade())
+        if buying_power < 10.0:
+            return 'x'  # Not enough funds to proceed
+
         purchase_balance = buying_power - 5.0
-        balance_needed = purchase_balance - 5.0
+
         VUG_price = get_stock_price("VUG")
         quantity = purchase_balance / VUG_price
-        if balance_needed < 1:
+        quantity = round(quantity, 4)
+
+        if quantity < (purchase_balance / VUG_price):
             return 'x'
+
         ticker = "VUG"
         ft_order.place_order(
             ft_accounts.account_numbers[0],
             symbol=ticker,
-            price_type=order.PriceType.MARKET,
+            price_type=order.PriceType.LIMIT,
             order_type=order.OrderType.BUY,
             quantity=quantity,
+            price=VUG_price,
             duration=order.Duration.DAY,
-            dry_run=True,
+            dry_run=False,
         )
+
+        print(ft_order.order_confirmation)
+        
         new_buying_power = float(get_buying_power_firstrade())
         return new_buying_power
     except Exception as e:
@@ -562,19 +571,20 @@ def sell_all_shares_firstrade():
         for ticker in tickers:
             try:
                 positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
-                if any(position['symbol'] == ticker for position in positions):
-                    position = next(position for position in positions if position['symbol'] == ticker)
+                if ticker in positions:
+                    position = positions[ticker]
                     shares = int(position['quantity'])
                     last_price = float(position['price'])
                     ft_order = order.Order(ft_ss)
                     ft_order.place_order(
                         ft_accounts.account_numbers[0],
                         symbol=ticker,
-                        price_type=order.PriceType.MARKET,
+                        price_type=order.PriceType.LIMIT,
                         order_type=order.OrderType.SELL,
                         quantity=shares,
+                        price=last_price,
                         duration=order.Duration.DAY,
-                        dry_run=True,
+                        dry_run=False,
                     )
                     order_confirmation = ft_order.order_confirmation
                     if order_confirmation.get("success") == "Yes":
@@ -613,7 +623,7 @@ async def sell_all_shares_discord():
         webull_message = sell_all_shares_webull()
         firstrade_message = sell_all_shares_firstrade()
         sell_channel = bot.get_channel(sell_channel_id)
-        final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}\n\nWebull:\n{webull_message}\n\Firstrade:\n{firstrade_message}"
+        final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}\n\nWebull:\n{webull_message}\n\nFirstrade:\n{firstrade_message}"
         if len(final_message) > 4000:
             await sell_channel.send("The message is too long to be displayed.")
         else:
@@ -704,12 +714,22 @@ def get_buying_power_webull():
 
 def get_buying_power_firstrade():
     try:
-        ft_accounts = account.FTAccountData(ft_ss)
-        if len(ft_accounts.account_numbers) < 1:
-            raise Exception("No accounts found or an error occurred exiting...")
         cash = ft_accounts.account_balances[0]
-        cash_float = float(cash.replace('$', ''))
-        return cash_float
+        cash_float = float(cash.replace('$', '').replace(',', ''))
+        
+        positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
+        
+        total_stock_value = 0.0
+        
+        for symbol, data in positions.items():
+            quantity = float(data['quantity'].replace(',', ''))
+            price = float(data['price'].replace('+', '').replace(',', ''))
+            stock_value = quantity * price
+            total_stock_value += stock_value
+        
+        cash_balance = cash_float - total_stock_value
+        return cash_balance
+    
     except Exception as e:
         print(f"Failed to get cash balance from Firstrade: {e}")
         return 'x'
@@ -717,7 +737,7 @@ def get_buying_power_firstrade():
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
     schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-    schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
+    schedule.every().day.at("10:41").do(lambda: asyncio.create_task(buy_VUG()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
