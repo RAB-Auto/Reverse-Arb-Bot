@@ -18,11 +18,11 @@ import requests
 load_dotenv()
 
 # Define the file paths for credentials and JSON files
-robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/RobinPass.txt'
-public_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/PublicPass.txt'
-webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/WebullPass.txt'
-firstrade_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/FirstradePass.txt'
-tradier_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/TradierPass.txt'
+robinhood_file_path = '/Users/karthikkurapati/Desktop/Credentials/robinpass.txt'
+public_file_path = '/Users/karthikkurapati/Desktop/Credentials/publicpass.txt'
+webull_file_path = '/Users/karthikkurapati/Desktop/Credentials/webullpass.txt'
+firstrade_file_path = '/Users/karthikkurapati/Desktop/Credentials/firsttradepass.txt'
+tradier_file_path = '/Users/karthikkurapati/Desktop/Credentials/tradierpass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 webull_json_file_path = 'currentArbsWebull.json'
@@ -195,22 +195,22 @@ async def on_message(message):
         webull_result = None
         firstrade_result = None
         tradier_result = None
-        try:
-            robinhood_result = buy_stock_robinhood(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Robinhood: {e}")
-        try:
-            public_result = buy_stock_public(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Public: {e}")
-        try:
-            webull_result = buy_stock_webull(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Webull: {e}")
-        try:
-            firstrade_result = buy_stock_firstrade(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Firstrade: {e}")
+        # try:
+        #     robinhood_result = buy_stock_robinhood(ticker)
+        # except Exception as e:
+        #     print(f"Failed to place order for {ticker} on Robinhood: {e}")
+        # try:
+        #     public_result = buy_stock_public(ticker)
+        # except Exception as e:
+        #     print(f"Failed to place order for {ticker} on Public: {e}")
+        # try:
+        #     webull_result = buy_stock_webull(ticker)
+        # except Exception as e:
+        #     print(f"Failed to place order for {ticker} on Webull: {e}")
+        # try:
+        #     firstrade_result = buy_stock_firstrade(ticker)
+        # except Exception as e:
+        #     print(f"Failed to place order for {ticker} on Firstrade: {e}")
         try:
             tradier_result = buy_stock_tradier(tradier_API_key, tradier_account_ID, ticker)
         except Exception as e:
@@ -456,6 +456,9 @@ def buy_SCHG_webull():
         return 'x'
     
 def buy_VUG_firstrade():
+    ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+    ft_order = order.Order(ft_ss)
+    ft_accounts = account.FTAccountData(ft_ss)
     try:
         buying_power = float(get_buying_power_firstrade())
         if buying_power < 10.0:
@@ -672,6 +675,9 @@ def sell_all_shares_webull():
         return f"Failed to process Webull shares: {e}"
 
 def sell_all_shares_firstrade():
+    ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+    ft_order = order.Order(ft_ss)
+    ft_accounts = account.FTAccountData(ft_ss)
     try:
         tickers = read_tickers(firstrade_json_file_path)
         result_messages = []
@@ -952,8 +958,8 @@ def get_buying_power_tradier(tradier_API_key):
 
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
-    schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-    schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
+    schedule.every().day.at("09:54").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+    schedule.every().day.at("09:46").do(lambda: asyncio.create_task(buy_VUG()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
