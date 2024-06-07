@@ -682,8 +682,6 @@ def sell_all_shares_firstrade():
             return "\n".join(result_messages)
 
         ft_accounts = account.FTAccountData(ft_ss)
-        if len(ft_accounts.account_numbers) < 1:
-            raise Exception("No Firstrade accounts found or an error occurred.")
 
         for ticker in tickers:
             try:
