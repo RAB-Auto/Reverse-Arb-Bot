@@ -18,11 +18,11 @@ import requests
 load_dotenv()
 
 # Define the file paths for credentials and JSON files
-robinhood_file_path = '/Users/karthikkurapati/Desktop/Credentials/robinpass.txt'
-public_file_path = '/Users/karthikkurapati/Desktop/Credentials/publicpass.txt'
-webull_file_path = '/Users/karthikkurapati/Desktop/Credentials/webullpass.txt'
-firstrade_file_path = '/Users/karthikkurapati/Desktop/Credentials/firsttradepass.txt'
-tradier_file_path = '/Users/karthikkurapati/Desktop/Credentials/tradierpass.txt'
+robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/RobinPass.txt'
+public_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/PublicPass.txt'
+webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/WebullPass.txt'
+firstrade_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/FirstradePass.txt'
+tradier_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/TradierPass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 webull_json_file_path = 'currentArbsWebull.json'
@@ -47,11 +47,12 @@ tradier_account_ID = None
 # Initialize Discord bot with intents
 intents = discord.Intents.all()
 intents.messages = True
-bot = commands.Bot(command_prefix="$", intents=intents)
+bot = commands.Bot(command_prefix="%", intents=intents)
 discord_token = os.getenv('DISCORD_BOT_TOKEN')
 buy_channel_id = 1240105481259716669  # Replace with your channel ID for buy notifications
 sell_channel_id = 1240109934654390382  # Replace with your channel ID for sell notifications
 alerts_channel_id = 1241468924034416691  # Replace with your channel ID for alerts
+command_channel_id = 1249116072423067718 # Replace with your channel ID for commands
 
 # Read Robinhood credentials from file
 try:
@@ -195,28 +196,30 @@ async def on_message(message):
         webull_result = None
         firstrade_result = None
         tradier_result = None
-        # try:
-        #     robinhood_result = buy_stock_robinhood(ticker)
-        # except Exception as e:
-        #     print(f"Failed to place order for {ticker} on Robinhood: {e}")
-        # try:
-        #     public_result = buy_stock_public(ticker)
-        # except Exception as e:
-        #     print(f"Failed to place order for {ticker} on Public: {e}")
-        # try:
-        #     webull_result = buy_stock_webull(ticker)
-        # except Exception as e:
-        #     print(f"Failed to place order for {ticker} on Webull: {e}")
-        # try:
-        #     firstrade_result = buy_stock_firstrade(ticker)
-        # except Exception as e:
-        #     print(f"Failed to place order for {ticker} on Firstrade: {e}")
+        try:
+            robinhood_result = buy_stock_robinhood(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Robinhood: {e}")
+        try:
+            public_result = buy_stock_public(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Public: {e}")
+        try:
+            webull_result = buy_stock_webull(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Webull: {e}")
+        try:
+            firstrade_result = buy_stock_firstrade(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Firstrade: {e}")
         try:
             tradier_result = buy_stock_tradier(tradier_API_key, tradier_account_ID, ticker)
         except Exception as e:
             print(f"Failed to place order for {ticker} on Tradier: {e}")
 
         await send_order_message(message.channel, ticker, robinhood_result, public_result, webull_result, firstrade_result, tradier_result)
+
+    await bot.process_commands(message)
 
 def get_stock_price(symbol: str):
     stock = yf.Ticker(symbol)
@@ -304,7 +307,7 @@ def buy_stock_firstrade(ticker):
     ft_order = order.Order(ft_ss)
     ft_accounts = account.FTAccountData(ft_ss)
 
-    price = get_stock_price(ticker)
+    price = get_stock_price(ticker) + 0.01
 
     # Place a market buy order
     try:
@@ -377,16 +380,15 @@ async def send_order_message(channel, ticker, robinhood_result, public_result, w
     firstrade_status = "✅" if firstrade_result and firstrade_result.get('success') == 'Yes' else f"❌ Firstrade: {firstrade_result.get('msg', firstrade_result.get('actiondata', 'Unknown error')) if firstrade_result else 'Unknown error'}"
     tradier_status = "✅" if tradier_result and tradier_result.get('success', False) else f"❌ Tradier: {tradier_result.get('detail', 'Unknown error') if tradier_result else 'Unknown error'}"
 
-    message_text = (
-        f"Order for {ticker}:\n"
-        f"Robinhood: {robinhood_status}\n"
-        f"Public: {public_status}\n"
-        f"Webull: {webull_status}\n"
-        f"Firstrade: {firstrade_status}\n"
-        f"Tradier: {tradier_status}"
-    )
-    await channel.send(message_text)
-    print(message_text)
+    embed = discord.Embed(title=f"Order Status for {ticker}", color=0x00ff00)
+    embed.add_field(name="📈 Robinhood", value=robinhood_status, inline=False)
+    embed.add_field(name="🌐 Public", value=public_status, inline=False)
+    embed.add_field(name="📊 Webull", value=webull_status, inline=False)
+    embed.add_field(name="💹 Firstrade", value=firstrade_status, inline=False)
+    embed.add_field(name="💱 Tradier", value=tradier_status, inline=False)
+    
+    await channel.send(embed=embed)
+    print(f"Order for {ticker}:\n{robinhood_status}\n{public_status}\n{webull_status}\n{firstrade_status}\n{tradier_status}")
 
 def buy_VUG_robinhood():
     try:
@@ -487,6 +489,7 @@ def buy_VUG_firstrade():
 
         print(ft_order.order_confirmation)
         
+        time.sleep(5)
         new_buying_power = float(get_buying_power_firstrade())
         return new_buying_power
     except Exception as e:
@@ -543,10 +546,11 @@ def sell_all_shares_robinhood():
     tickers = read_tickers(robinhood_json_file_path)
     result_messages = []
     tickers_to_remove = []
+    total_profit = 0
 
     if not tickers:
         result_messages.append("No stocks are currently bought.")
-        return "\n".join(result_messages)
+        return "\n".join(result_messages), total_profit
 
     for ticker in tickers:
         try:
@@ -556,6 +560,8 @@ def sell_all_shares_robinhood():
                 last_price = float(positions[ticker]['price'])
                 order_result = r.order_sell_market(ticker, shares, timeInForce='gfd')
                 if order_result and order_result.get('id'):
+                    profit = shares * last_price
+                    total_profit += profit
                     message = f"Sold {shares} shares of {ticker} at ${last_price}."
                     result_messages.append(message)
                     tickers_to_remove.append(ticker)
@@ -574,9 +580,10 @@ def sell_all_shares_robinhood():
     if not result_messages:
         result_messages.append("No stocks are currently bought.")
     
-    return "\n".join(result_messages)
+    return "\n".join(result_messages), total_profit
 
 def sell_all_shares_public():
+    total_profit = 0
     try:
         tickers = read_tickers(public_json_file_path)
         result_messages = []
@@ -584,7 +591,7 @@ def sell_all_shares_public():
 
         if not tickers:
             result_messages.append("No stocks are currently bought.")
-            return "\n".join(result_messages)
+            return "\n".join(result_messages), total_profit
 
         public = Public()
         public.login(username=public_username, password=public_password, wait_for_2fa=True)
@@ -608,6 +615,8 @@ def sell_all_shares_public():
                         time_in_force='gtc'
                     )
                     if order_result.get('orderId'):
+                        profit = shares * last_price
+                        total_profit += profit
                         message = f"Sold {shares} shares of {ticker} at ${last_price}."
                         result_messages.append(message)
                         tickers_to_remove.append(ticker)
@@ -626,11 +635,12 @@ def sell_all_shares_public():
         if not result_messages:
             result_messages.append("No stocks are currently bought.")
         
-        return "\n".join(result_messages)
+        return "\n".join(result_messages), total_profit
     except Exception as e:
-        return f"Failed to process Public shares: {e}"
+        return f"Failed to process Public shares: {e}", total_profit
 
 def sell_all_shares_webull():
+    total_profit = 0
     try:
         tickers = read_tickers(webull_json_file_path)
         result_messages = []
@@ -638,7 +648,7 @@ def sell_all_shares_webull():
 
         if not tickers:
             result_messages.append("No stocks are currently bought.")
-            return "\n".join(result_messages)
+            return "\n".join(result_messages), total_profit
 
         wb.login(webull_number, webull_password)
         wb.get_trade_token(webull_trade_token)
@@ -652,6 +662,8 @@ def sell_all_shares_webull():
                     last_price = float(position['lastPrice'])
                     order_result = wb.place_order(action="SELL", stock=ticker, orderType="MKT", quant=shares, enforce="DAY")
                     if 'success' in order_result and order_result['success']:
+                        profit = shares * last_price
+                        total_profit += profit
                         message = f"Sold {shares} shares of {ticker} at ${last_price}."
                         result_messages.append(message)
                         tickers_to_remove.append(ticker)
@@ -670,14 +682,15 @@ def sell_all_shares_webull():
         if not result_messages:
             result_messages.append("No stocks are currently bought.")
         
-        return "\n".join(result_messages)
+        return "\n".join(result_messages), total_profit
     except Exception as e:
-        return f"Failed to process Webull shares: {e}"
+        return f"Failed to process Webull shares: {e}", total_profit
 
 def sell_all_shares_firstrade():
     ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
     ft_order = order.Order(ft_ss)
     ft_accounts = account.FTAccountData(ft_ss)
+    total_profit = 0
     try:
         tickers = read_tickers(firstrade_json_file_path)
         result_messages = []
@@ -685,7 +698,7 @@ def sell_all_shares_firstrade():
 
         if not tickers:
             result_messages.append("No stocks are currently bought.")
-            return "\n".join(result_messages)
+            return "\n".join(result_messages), total_profit
 
         ft_accounts = account.FTAccountData(ft_ss)
 
@@ -709,6 +722,8 @@ def sell_all_shares_firstrade():
                     )
                     order_confirmation = ft_order.order_confirmation
                     if order_confirmation.get("success") == "Yes":
+                        profit = shares * last_price
+                        total_profit += profit
                         message = f"Sold {shares} shares of {ticker} at ${last_price}."
                         result_messages.append(message)
                         tickers_to_remove.append(ticker)
@@ -727,13 +742,14 @@ def sell_all_shares_firstrade():
         if not result_messages:
             result_messages.append("No stocks are currently bought.")
         
-        return "\n".join(result_messages)
+        return "\n".join(result_messages), total_profit
     except Exception as e:
-        return f"Failed to process Firstrade shares: {e}"
+        return f"Failed to process Firstrade shares: {e}", total_profit
 
 def sell_all_shares_tradier():
     api_key = tradier_API_key 
     account_id = tradier_account_ID
+    total_profit = 0
         
     try:
         tickers = read_tickers(tradier_json_file_path)
@@ -742,7 +758,7 @@ def sell_all_shares_tradier():
 
         if not tickers:
             result_messages.append("No stocks are currently bought.")
-            return "\n".join(result_messages)
+            return "\n".join(result_messages), total_profit
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -780,6 +796,8 @@ def sell_all_shares_tradier():
                     )
 
                     if order_response.status_code == 200 and 'order' in order_response.json():
+                        profit = shares * float(get_stock_price(ticker))
+                        total_profit += profit
                         message = f"Sold {shares} shares of {ticker}."
                         result_messages.append(message)
                         tickers_to_remove.append(ticker)
@@ -798,31 +816,39 @@ def sell_all_shares_tradier():
         if not result_messages:
             result_messages.append("No stocks are currently bought.")
         
-        return "\n".join(result_messages)
+        return "\n".join(result_messages), total_profit
     except Exception as e:
-        return f"Failed to process Tradier shares: {e}"
+        return f"Failed to process Tradier shares: {e}", total_profit
 
 async def sell_all_shares_discord():
     if datetime.today().weekday() < 5:
+        print("running sells for the day")
         holidays = read_holidays(holidays_json_file_path)
         if is_today_holiday(holidays):
             await bot.get_channel(sell_channel_id).send("No sell trades for today: market holiday")
             print("No sell trades for today: market holiday")
             return
 
-        robinhood_message = sell_all_shares_robinhood()
-        public_message = sell_all_shares_public()
-        webull_message = sell_all_shares_webull()
-        firstrade_message = sell_all_shares_firstrade()
-        tradier_message = sell_all_shares_tradier()
+        robinhood_message, robinhood_profit = sell_all_shares_robinhood()
+        public_message, public_profit = sell_all_shares_public()
+        webull_message, webull_profit = sell_all_shares_webull()
+        firstrade_message, firstrade_profit = sell_all_shares_firstrade()
+        tradier_message, tradier_profit = sell_all_shares_tradier()
+
+        total_profit = robinhood_profit + public_profit + webull_profit + firstrade_profit + tradier_profit
         
         sell_channel = bot.get_channel(sell_channel_id)
-        final_message = f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}\n\nWebull:\n{webull_message}\n\nFirstrade:\n{firstrade_message}\n\nTradier:\n{tradier_message}"
-        if len(final_message) > 4000:
-            await sell_channel.send("The message is too long to be displayed.")
-        else:
-            await sell_channel.send(final_message)
-        print(final_message)
+
+        embed = discord.Embed(title=f"{datetime.today().strftime('%Y-%m-%d')} - Sells", color=0xff0000)
+        embed.add_field(name="📈 Robinhood", value=robinhood_message, inline=False)
+        embed.add_field(name="🌐 Public", value=public_message, inline=False)
+        embed.add_field(name="📊 Webull", value=webull_message, inline=False)
+        embed.add_field(name="💹 Firstrade", value=firstrade_message, inline=False)
+        embed.add_field(name="💱 Tradier", value=tradier_message, inline=False)
+        embed.add_field(name="💰 Total Profit", value=f"${total_profit:.2f}", inline=False)
+
+        await sell_channel.send(embed=embed)
+        print(f"Robinhood:\n{robinhood_message}\n\nPublic:\n{public_message}\n\nWebull:\n{webull_message}\n\nFirstrade:\n{firstrade_message}\n\nTradier:\n{tradier_message}\n\nTotal Profit: ${total_profit:.2f}")
     else:
         return
 
@@ -838,6 +864,7 @@ async def buy_VUG():
         public_balance = None
         webull_balance = None
         firstrade_balance = None
+        tradier_balance = None
 
         try:
             robinhood_balance = buy_VUG_robinhood()
@@ -958,11 +985,98 @@ def get_buying_power_tradier(tradier_API_key):
 
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
-    schedule.every().day.at("09:54").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-    schedule.every().day.at("09:46").do(lambda: asyncio.create_task(buy_VUG()))
+    schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+    schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
+
+@bot.command()
+async def total(ctx):
+    if ctx.channel.id != command_channel_id:
+        await ctx.send(f"This command can only be used in the designated command channel: <#{command_channel_id}>")
+        return
+
+    total_value = 0
+    total_message = ""
+
+    emojis = {
+        'Robinhood': '📈',
+        'Public': '🌐',
+        'Webull': '📊',
+        'Firstrade': '💹',
+        'Tradier': '💱'
+    }
+
+    # Robinhood
+    try:
+        robinhood_positions = r.build_holdings()
+        VUG_value = sum(float(pos['quantity']) * float(pos['price']) for ticker, pos in robinhood_positions.items() if ticker == 'VUG')
+        total_value += VUG_value
+        total_message += f"{emojis['Robinhood']} Robinhood: ${VUG_value:.2f} - VUG\n"
+        print(f"Robinhood VUG value: ${VUG_value:.2f}")
+    except Exception as e:
+        total_message += f"{emojis['Robinhood']} Robinhood: Error fetching data ({e})\n"
+        print(f"Error fetching Robinhood data: {e}")
+
+    # Public
+    try:
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+        public_positions = public.get_positions()
+        VUG_value = sum(float(pos['quantity']) * float(public.get_symbol_price(pos['instrument']['symbol'])) for pos in public_positions if pos['instrument']['symbol'] == 'VUG')
+        total_value += VUG_value
+        total_message += f"{emojis['Public']} Public: ${VUG_value:.2f} - VUG\n"
+        print(f"Public VUG value: ${VUG_value:.2f}")
+    except Exception as e:
+        total_message += f"{emojis['Public']} Public: Error fetching data ({e})\n"
+        print(f"Error fetching Public data: {e}")
+
+    # Webull
+    try:
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+        webull_positions = wb.get_positions()
+        SCHG_value = sum(float(pos['position']) * float(pos['lastPrice']) for pos in webull_positions if pos['ticker']['symbol'] == 'SCHG')
+        total_value += SCHG_value
+        total_message += f"{emojis['Webull']} Webull: ${SCHG_value:.2f} - SCHG\n"
+        print(f"Webull SCHG value: ${SCHG_value:.2f}")
+    except Exception as e:
+        total_message += f"{emojis['Webull']} Webull: Error fetching data ({e})\n"
+        print(f"Error fetching Webull data: {e}")
+
+    # Firstrade
+    try:
+        ft_positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
+        VUG_value = sum(float(pos['quantity']) * float(pos['price']) for ticker, pos in ft_positions.items() if ticker == 'VUG')
+        total_value += VUG_value
+        total_message += f"{emojis['Firstrade']} Firstrade: ${VUG_value:.2f} - VUG\n"
+        print(f"Firstrade VUG value: ${VUG_value:.2f}")
+    except Exception as e:
+        total_message += f"{emojis['Firstrade']} Firstrade: Error fetching data ({e})\n"
+        print(f"Error fetching Firstrade data: {e}")
+
+    # Tradier
+    try:
+        headers = {
+            "Authorization": f"Bearer {tradier_API_key}",
+            "Accept": "application/json"
+        }
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/positions", headers=headers)
+        tradier_positions = response.json().get('positions', {}).get('position', [])
+        SCHG_value = sum(float(pos['quantity']) * float(get_stock_price(pos['symbol'])) for pos in tradier_positions if pos['symbol'] == 'SCHG')
+        total_value += SCHG_value
+        total_message += f"{emojis['Tradier']} Tradier: ${SCHG_value:.2f} - SCHG\n"
+        print(f"Tradier SCHG value: ${SCHG_value:.2f}")
+    except Exception as e:
+        total_message += f"{emojis['Tradier']} Tradier: Error fetching data ({e})\n"
+        print(f"Error fetching Tradier data: {e}")
+
+    final_message = f"**💰 Total Saved: ${total_value:.2f}**\n\n{total_message}"
+
+    embed = discord.Embed(title="Portfolio Summary", description=final_message, color=0xffd700)
+    await ctx.send(embed=embed)
+    print(final_message)
 
 async def main():
     await bot.start(discord_token)
