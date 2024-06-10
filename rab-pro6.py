@@ -122,45 +122,48 @@ def is_today_holiday(holidays):
 
 # Start the brokerages that need to be ran
 wb = webull()
-ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
-ft_order = order.Order(ft_ss)
-ft_accounts = account.FTAccountData(ft_ss)
+try:
+    ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+    ft_order = order.Order(ft_ss)
+    ft_accounts = account.FTAccountData(ft_ss)
+except Exception as e:
+    print(e)
 
 @bot.event
 async def on_ready():
     print(f'We have logged in as {bot.user}')
     
-    # Send login messages
-    login_message = []
+    embed = discord.Embed(title="Login Statuses", color=0x800080)
+    
     try:
         r.login(robinhood_email, robinhood_password)
-        login_message.append("✅ Logged in successfully to RobinHood!")
+        embed.add_field(name="RobinHood", value="✅ Logged in successfully to RobinHood!", inline=False)
     except Exception as e:
-        login_message.append(f"❌ RobinHood login failed: {e}")
+        embed.add_field(name="RobinHood", value=f"❌ RobinHood login failed: {e}", inline=False)
 
     try:
         public = Public()
         public.login(username=public_username, password=public_password, wait_for_2fa=True)
-        login_message.append("✅ Logged in successfully to Public!")
+        embed.add_field(name="Public", value="✅ Logged in successfully to Public!", inline=False)
     except Exception as e:
-        login_message.append(f"❌ Public login failed: {e}")
+        embed.add_field(name="Public", value=f"❌ Public login failed: {e}", inline=False)
 
     try:
         wb.login(webull_number, webull_password)
         login_result = wb.login(webull_number, webull_password)
         
         if 'accessToken' in login_result:
-            login_message.append("✅ Logged in successfully to Webull!")
+            embed.add_field(name="Webull", value="✅ Logged in successfully to Webull!", inline=False)
         else:
-            login_message.append("❌ Webull login failed: Access token not found in the response.")
+            embed.add_field(name="Webull", value="❌ Webull login failed: Access token not found in the response.", inline=False)
     except Exception as e:
-        login_message.append(f"❌ Webull login failed: {e}")
+        embed.add_field(name="Webull", value=f"❌ Webull login failed: {e}", inline=False)
 
     try:
         ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
-        login_message.append("✅ Logged in successfully to Firstrade!")
+        embed.add_field(name="Firstrade", value="✅ Logged in successfully to Firstrade!", inline=False)
     except Exception as e:
-        login_message.append(f"❌ Firstrade login failed: {e}")
+        embed.add_field(name="Firstrade", value=f"❌ Firstrade login failed: {e}", inline=False)
 
     try:
         api_key = tradier_API_key
@@ -172,52 +175,85 @@ async def on_ready():
         response = requests.get(f"https://api.tradier.com/v1/accounts/{account_id}/balances", headers=headers)
         
         if response.status_code == 200:
-            login_message.append("✅ Logged in successfully to Tradier!")
+            embed.add_field(name="Tradier", value="✅ Logged in successfully to Tradier!", inline=False)
         else:
-            login_message.append(f"❌ Tradier login failed: {response.status_code} - {response.text}")
+            embed.add_field(name="Tradier", value=f"❌ Tradier login failed: {response.status_code} - {response.text}", inline=False)
     except Exception as e:
-        login_message.append(f"❌ Tradier login failed: {e}")
+        embed.add_field(name="Tradier", value=f"❌ Tradier login failed: {e}", inline=False)
 
-    for message in login_message:
-        print(message)
-        await bot.get_channel(alerts_channel_id).send(message)
+    output_channel = bot.get_channel(alerts_channel_id)
+    await output_channel.send(embed=embed)
     
     asyncio.create_task(schedule_tasks())
 
 @bot.event
-async def on_message(message):
-    if message.channel.id == buy_channel_id and message.content.startswith('$'):
-        ticker = message.content[1:].strip().upper()
-        print(f"Processing ticker: {ticker}")
-        robinhood_result = None
-        public_result = None
-        webull_result = None
-        firstrade_result = None
-        tradier_result = None
-        try:
-            robinhood_result = buy_stock_robinhood(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Robinhood: {e}")
-        try:
-            public_result = buy_stock_public(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Public: {e}")
-        try:
-            webull_result = buy_stock_webull(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Webull: {e}")
-        try:
-            firstrade_result = buy_stock_firstrade(ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Firstrade: {e}")
-        try:
-            tradier_result = buy_stock_tradier(tradier_API_key, tradier_account_ID, ticker)
-        except Exception as e:
-            print(f"Failed to place order for {ticker} on Tradier: {e}")
+async def on_ready():
+    print(f'We have logged in as {bot.user}')
+    
+    embed = discord.Embed(title="Login Statuses 🤖", color=0x800080)
+    
+    try:
+        r.login(robinhood_email, robinhood_password)
+        print("✅ Logged in successfully to RobinHood!")
+        embed.add_field(name="RobinHood", value="✅ Logged in successfully to RobinHood!", inline=False)
+    except Exception as e:
+        print(f"❌ RobinHood login failed: {e}")
+        embed.add_field(name="RobinHood", value=f"❌ RobinHood login failed: {e}", inline=False)
 
-        await send_order_message(message.channel, ticker, robinhood_result, public_result, webull_result, firstrade_result, tradier_result)
+    try:
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+        print("✅ Logged in successfully to Public!")
+        embed.add_field(name="Public", value="✅ Logged in successfully to Public!", inline=False)
+    except Exception as e:
+        print(f"❌ Public login failed: {e}")
+        embed.add_field(name="Public", value=f"❌ Public login failed: {e}", inline=False)
 
-    await bot.process_commands(message)
+    try:
+        wb.login(webull_number, webull_password)
+        login_result = wb.login(webull_number, webull_password)
+        
+        if 'accessToken' in login_result:
+            print("✅ Logged in successfully to Webull!")
+            embed.add_field(name="Webull", value="✅ Logged in successfully to Webull!", inline=False)
+        else:
+            print("❌ Webull login failed: Access token not found in the response.")
+            embed.add_field(name="Webull", value="❌ Webull login failed: Access token not found in the response.", inline=False)
+    except Exception as e:
+        print(f"❌ Webull login failed: {e}")
+        embed.add_field(name="Webull", value=f"❌ Webull login failed: {e}", inline=False)
+
+    try:
+        ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+        print("✅ Logged in successfully to Firstrade!")
+        embed.add_field(name="Firstrade", value="✅ Logged in successfully to Firstrade!", inline=False)
+    except Exception as e:
+        print(f"❌ Firstrade login failed: {e}")
+        embed.add_field(name="Firstrade", value=f"❌ Firstrade login failed: {e}", inline=False)
+
+    try:
+        api_key = tradier_API_key
+        account_id = tradier_account_ID
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json"
+        }
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{account_id}/balances", headers=headers)
+        
+        if response.status_code == 200:
+            print("✅ Logged in successfully to Tradier!")
+            embed.add_field(name="Tradier", value="✅ Logged in successfully to Tradier!", inline=False)
+        else:
+            print(f"❌ Tradier login failed: {response.status_code} - {response.text}")
+            embed.add_field(name="Tradier", value=f"❌ Tradier login failed: {response.status_code} - {response.text}", inline=False)
+    except Exception as e:
+        print(f"❌ Tradier login failed: {e}")
+        embed.add_field(name="Tradier", value=f"❌ Tradier login failed: {e}", inline=False)
+
+    output_channel = bot.get_channel(alerts_channel_id)
+    await output_channel.send(embed=embed)
+    
+    asyncio.create_task(schedule_tasks())
 
 def get_stock_price(symbol: str):
     stock = yf.Ticker(symbol)
@@ -393,15 +429,15 @@ def buy_VUG_robinhood():
         buying_power = float(get_buying_power_robinhood())
         purchase_balance = buying_power - 5.0
         if purchase_balance < 1:
-            return 'x'
+            return {"success": False, "detail": "Not enough buying power"}
         ticker = "VUG"
         order_result = r.orders.order_buy_fractional_by_price(ticker, purchase_balance, timeInForce="gfd", extendedHours=False)
         print(f"Order result: {order_result}")  # Debug log
         new_buying_power = float(get_buying_power_robinhood())
-        return new_buying_power
+        return {"success": True, "balance": new_buying_power, "quantity": purchase_balance}
     except Exception as e:
         print(f"Failed to buy VUG on Robinhood: {e}")
-        return 'x'
+        return {"success": False, "detail": str(e)}
 
 def buy_VUG_public():
     try:
@@ -410,12 +446,12 @@ def buy_VUG_public():
         
         balance = float(get_buying_power_public(public_instance))
         if (balance - 5.0 < 1):
-            return 'x'
+            return {"success": False, "detail": "Not enough buying power"}
         else:
             stock_price = get_stock_price('VUG')
             if stock_price is None:
                 print("Failed to get stock price")
-                return 'x'
+                return {"success": False, "detail": "Failed to get stock price"}
 
             fractional = (balance - 5.0) / stock_price
             fractional = math.floor(fractional * 10000) / 10000  # Keep up to 4 decimal places
@@ -430,10 +466,10 @@ def buy_VUG_public():
 
         print(f"Public order result: {response}")  # Debug log
         new_balance = float(get_buying_power_public(public_instance))
-        return new_balance
+        return {"success": True, "balance": new_balance, "quantity": fractional}
     except Exception as e:
         print(f"Failed to buy VUG on Public: {e}")
-        return 'x'
+        return {"success": False, "detail": str(e)}
 
 def buy_SCHG_webull():
     try:
@@ -445,15 +481,15 @@ def buy_SCHG_webull():
         money_for_SCHG = balance - value_SCHG
         money_needed_for_SCHG = money_for_SCHG - 200
         if(money_needed_for_SCHG <= 1):
-            return "x"
+            return {"success": False, "detail": "Not enough buying power"}
         else:
             response = wb.place_order(stock = "SCHG", action = "BUY", orderType="MKT", quant=1, enforce="DAY")
-        print(f"Public order result: {response}")  # Debug log
+        print(f"Webull order result: {response}")  # Debug log
         new_balance = float(get_buying_power_webull())
-        return new_balance
+        return {"success": True, "balance": new_balance, "quantity": 1}
     except Exception as e:
-        print(f"Failed to buy VUG on Webull: {e}")
-        return 'x'
+        print(f"Failed to buy SCHG on Webull: {e}")
+        return {"success": False, "detail": str(e)}
     
 def buy_VUG_firstrade():
     ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
@@ -462,14 +498,14 @@ def buy_VUG_firstrade():
     try:
         buying_power = float(get_buying_power_firstrade())
         if buying_power < 10.0:
-            return 'x'
+            return {"success": False, "detail": "Not enough buying power"}
 
         purchase_balance = buying_power - 5.0
 
         VUG_price = get_stock_price("VUG")
         if VUG_price is None:
             print("Failed to get stock price for VUG")  # Debug log
-            return 'x'
+            return {"success": False, "detail": "Failed to get stock price"}
 
         quantity = purchase_balance / VUG_price
         quantity = round(quantity, 4)
@@ -490,29 +526,24 @@ def buy_VUG_firstrade():
 
         time.sleep(5)  # Wait for the order to be processed
         new_buying_power = float(get_buying_power_firstrade())
-        return new_buying_power
+        return {"success": True, "balance": new_buying_power, "quantity": quantity}
     except Exception as e:
         print(f"Failed to buy VUG on Firstrade: {e}")  # Debug log
-        return 'x'
+        return {"success": False, "detail": str(e)}
 
 def buy_SCHG_tradier():
     api_key = tradier_API_key
     account_id = tradier_account_ID
     try:
-        # Get buying power
         balance = get_buying_power_tradier(api_key)
         
-        # Get the stock price
         value_SCHG = get_stock_price("SCHG")
-        
-        # Calculate if there's enough money to buy the stock
         money_for_SCHG = balance - float(value_SCHG)
         money_needed_for_SCHG = money_for_SCHG - 5.35
         
         if money_needed_for_SCHG <= 1:
-            return "x"
+            return {"success": False, "detail": "Not enough buying power"}
         else:
-            # Place a market order to buy 1 share of SCHG
             url = f"https://api.tradier.com/v1/accounts/{account_id}/orders"
             headers = {
                 "Authorization": f"Bearer {api_key}",
@@ -531,15 +562,13 @@ def buy_SCHG_tradier():
             
             if response.status_code == 200 and 'order' in response.json():
                 print(f"Tradier order result: {response.json()}")  # Debug log
-                
-                # Get the new balance
                 new_balance = get_buying_power_tradier(api_key, account_id)
-                return new_balance
+                return {"success": True, "balance": new_balance, "quantity": 1}
             else:
                 raise ValueError(f"Failed to place buy order: {response.status_code} - {response.text}")
     except Exception as e:
         print(f"Failed to buy SCHG on Tradier: {e}")
-        return 'x'
+        return {"success": False, "detail": str(e)}
 
 def sell_all_shares_robinhood():
     tickers = read_tickers(robinhood_json_file_path)
@@ -869,7 +898,7 @@ async def sell_all_shares_discord():
         
         sell_channel = bot.get_channel(sell_channel_id)
 
-        embed = discord.Embed(title=f"{datetime.today().strftime('%Y-%m-%d')} - Sells", color=0xff0000)
+        embed = discord.Embed(title=f"📅 {datetime.today().strftime('%Y-%m-%d')} - Sells", color=0xff0000)
         embed.add_field(name="📈 Robinhood", value=robinhood_message, inline=False)
         embed.add_field(name="🌐 Public", value=public_message, inline=False)
         embed.add_field(name="📊 Webull", value=webull_message, inline=False)
@@ -890,53 +919,52 @@ async def buy_VUG():
             print("No buy trades for today: market holiday")
             return
 
-        robinhood_balance = None
-        public_balance = None
-        webull_balance = None
-        firstrade_balance = None
-        tradier_balance = None
+        robinhood_result = None
+        public_result = None
+        webull_result = None
+        firstrade_result = None
+        tradier_result = None
 
         try:
-            robinhood_balance = buy_VUG_robinhood()
+            robinhood_result = buy_VUG_robinhood()
         except Exception as e:
             print(f"Failed to buy VUG on Robinhood: {e}")
-            robinhood_balance = 'x'
+            robinhood_result = {"success": False, "detail": str(e)}
 
         try:
-            public_balance = buy_VUG_public()
+            public_result = buy_VUG_public()
         except Exception as e:
             print(f"Failed to buy VUG on Public: {e}")
-            public_balance = 'x'
+            public_result = {"success": False, "detail": str(e)}
 
         try:
-            webull_balance = buy_SCHG_webull()
+            webull_result = buy_SCHG_webull()
         except Exception as e:
             print(f"Failed to buy SCHG on Webull: {e}")
-            webull_balance = 'x'
+            webull_result = {"success": False, "detail": str(e)}
 
         try:
-            firstrade_balance = buy_VUG_firstrade()
+            firstrade_result = buy_VUG_firstrade()
         except Exception as e:
             print(f"Failed to buy VUG on Firstrade: {e}")
-            firstrade_balance = 'x'
+            firstrade_result = {"success": False, "detail": str(e)}
         
         try:
-            tradier_balance = buy_SCHG_tradier()
+            tradier_result = buy_SCHG_tradier()
         except Exception as e:
             print(f"Failed to buy SCHG on Tradier: {e}")
-            tradier_balance = 'x'
+            tradier_result = {"success": False, "detail": str(e)}
 
-        message_text = (
-            f"Robinhood: Bought Daily VUG Shares with Arb Money. Balance: ${robinhood_balance}\n"
-            f"Public: Bought Daily VUG Shares with Arb Money. Balance: ${public_balance}\n"
-            f"Webull: Bought Daily SCHG Shares with Arb Money. Balance: ${webull_balance}\n"
-            f"Firstrade: Bought Daily VUG Shares with Arb Money. Balance: ${firstrade_balance}\n"
-            f"Tradier: Bought Daily SCHG Shares with Arb Money. Balance: ${tradier_balance}"
-        )
+        embed = discord.Embed(title=f"{datetime.today().strftime('%Y-%m-%d')} Daily VUG/SCHG Buys 💸", color=0x0000ff)
+        embed.add_field(name="Robinhood - VUG", value=f"{'✅' if robinhood_result['success'] else '❌'} - {robinhood_result.get('balance', robinhood_result.get('detail', 'Error'))}", inline=False)
+        embed.add_field(name="Public - VUG", value=f"{'✅' if public_result['success'] else '❌'} - {public_result.get('balance', public_result.get('detail', 'Error'))}", inline=False)
+        embed.add_field(name="Webull - SCHG", value=f"{'✅' if webull_result['success'] else '❌'} - {webull_result.get('balance', webull_result.get('detail', 'Error'))}", inline=False)
+        embed.add_field(name="Firstrade - VUG", value=f"{'✅' if firstrade_result['success'] else '❌'} - {firstrade_result.get('balance', firstrade_result.get('detail', 'Error'))}", inline=False)
+        embed.add_field(name="Tradier - SCHG", value=f"{'✅' if tradier_result['success'] else '❌'} - {tradier_result.get('balance', tradier_result.get('detail', 'Error'))}", inline=False)
         
         output_channel = bot.get_channel(alerts_channel_id)
-        await output_channel.send(message_text)
-        print(message_text)
+        await output_channel.send(embed=embed)
+        print(embed.to_dict())
     else:
         return
 
@@ -986,7 +1014,6 @@ def get_buying_power_firstrade():
             total_stock_value += stock_value
         
         cash_balance = cash_float - total_stock_value
-        print(cash_balance)
         return cash_balance
     
     except Exception as e:
