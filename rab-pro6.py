@@ -125,8 +125,6 @@ wb = webull()
 ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
 ft_order = order.Order(ft_ss)
 ft_accounts = account.FTAccountData(ft_ss)
-if len(ft_accounts.account_numbers) < 1:
-    raise Exception("No accounts found or an error occured exiting...")
 
 @bot.event
 async def on_ready():
@@ -464,16 +462,17 @@ def buy_VUG_firstrade():
     try:
         buying_power = float(get_buying_power_firstrade())
         if buying_power < 10.0:
-            return 'x'  # Not enough funds to proceed
+            return 'x'
 
         purchase_balance = buying_power - 5.0
 
         VUG_price = get_stock_price("VUG")
+        if VUG_price is None:
+            print("Failed to get stock price for VUG")  # Debug log
+            return 'x'
+
         quantity = purchase_balance / VUG_price
         quantity = round(quantity, 4)
-
-        if quantity < (purchase_balance / VUG_price):
-            return 'x'
 
         ticker = "VUG"
         ft_order.place_order(
@@ -487,15 +486,15 @@ def buy_VUG_firstrade():
             dry_run=False,
         )
 
-        print(ft_order.order_confirmation)
-        
-        time.sleep(5)
+        print(ft_order.order_confirmation)  # Debug log
+
+        time.sleep(5)  # Wait for the order to be processed
         new_buying_power = float(get_buying_power_firstrade())
         return new_buying_power
     except Exception as e:
-        print(f"Failed to buy VUG on Firstrade: {e}")
+        print(f"Failed to buy VUG on Firstrade: {e}")  # Debug log
         return 'x'
-    
+
 def buy_SCHG_tradier():
     api_key = tradier_API_key
     account_id = tradier_account_ID
@@ -596,13 +595,11 @@ def sell_all_shares_public():
         public = Public()
         public.login(username=public_username, password=public_password, wait_for_2fa=True)
 
-        # Fetch positions and print them for debugging
         positions = public.get_positions()
         print("Positions:", positions)  # Debug statement to print the positions
 
         for ticker in tickers:
             try:
-                # Check if the ticker exists in the positions
                 if any(position['instrument']['symbol'] == ticker for position in positions):
                     position = next(position for position in positions if position['instrument']['symbol'] == ticker)
                     shares = float(position['quantity'])
@@ -628,13 +625,13 @@ def sell_all_shares_public():
             except Exception as e:
                 error_message = f"Failed to sell shares of {ticker} on Public: {e}"
                 result_messages.append(error_message)
-        
+
         remaining_tickers = [ticker for ticker in tickers if ticker not in tickers_to_remove]
         write_tickers(public_json_file_path, remaining_tickers)
 
         if not result_messages:
             result_messages.append("No stocks are currently bought.")
-        
+
         return "\n".join(result_messages), total_profit
     except Exception as e:
         return f"Failed to process Public shares: {e}", total_profit
@@ -709,26 +706,53 @@ def sell_all_shares_firstrade():
                     position = positions[ticker]
                     shares = int(position['quantity'])
                     last_price = float(position['price'])
-                    ft_order = order.Order(ft_ss)
+                    current_price = get_stock_price(ticker)
+                    
+                    # Attempt to sell at market price if current price is more than $1
+                    if current_price > 1:
+                        try:
+                            ft_order.place_order(
+                                ft_accounts.account_numbers[0],
+                                symbol=ticker,
+                                price_type=order.PriceType.MARKET,
+                                order_type=order.OrderType.SELL,
+                                quantity=shares,
+                                duration=order.Duration.DAY,
+                                dry_run=False,
+                            )
+                            order_confirmation = ft_order.order_confirmation
+                            if order_confirmation.get("success") == "Yes":
+                                profit = shares * last_price
+                                total_profit += profit
+                                message = f"Sold {shares} shares of {ticker} at market price of ${last_price}."
+                                result_messages.append(message)
+                                tickers_to_remove.append(ticker)
+                                continue  # Skip to next ticker if market sell succeeds
+                            else:
+                                raise ValueError(f"Failed to sell shares of {ticker} at market price. Order result: {order_confirmation}")
+                        except Exception as market_exception:
+                            print(f"Market sell failed for {ticker}: {market_exception}")
+
+                    # If market sell fails or stock price is less than $1, attempt to sell at limit price
                     ft_order.place_order(
                         ft_accounts.account_numbers[0],
                         symbol=ticker,
                         price_type=order.PriceType.LIMIT,
                         order_type=order.OrderType.SELL,
                         quantity=shares,
-                        price=last_price,
+                        price=current_price,  # Use current price as limit price
                         duration=order.Duration.DAY,
                         dry_run=False,
                     )
                     order_confirmation = ft_order.order_confirmation
                     if order_confirmation.get("success") == "Yes":
-                        profit = shares * last_price
+                        profit = shares * current_price
                         total_profit += profit
-                        message = f"Sold {shares} shares of {ticker} at ${last_price}."
+                        message = f"Sold {shares} shares of {ticker} at limit price of ${current_price}."
                         result_messages.append(message)
                         tickers_to_remove.append(ticker)
                     else:
-                        raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_confirmation}")
+                        raise ValueError(f"Failed to sell shares of {ticker} at limit price. Order result: {order_confirmation}")
                 else:
                     message = f"{ticker} not in account, checking again tomorrow."
                     result_messages.append(message)
@@ -750,7 +774,7 @@ def sell_all_shares_tradier():
     api_key = tradier_API_key 
     account_id = tradier_account_ID
     total_profit = 0
-        
+
     try:
         tickers = read_tickers(tradier_json_file_path)
         result_messages = []
@@ -766,20 +790,22 @@ def sell_all_shares_tradier():
             "Content-Type": "application/x-www-form-urlencoded"
         }
 
-        # Fetch positions
         response = requests.get(f"https://api.tradier.com/v1/accounts/{account_id}/positions", headers=headers)
         if response.status_code != 200:
             raise ValueError(f"Failed to fetch positions: {response.status_code} - {response.text}")
-        
+
         positions = response.json().get('positions', {}).get('position', [])
+        if isinstance(positions, dict):
+            positions = [positions]  # Ensure positions is a list
+
         print("Positions:", positions)  # Debug statement to print the positions
 
         for ticker in tickers:
             try:
-                # Check if the ticker exists in the positions
                 if any(position['symbol'] == ticker for position in positions):
                     position = next(position for position in positions if position['symbol'] == ticker)
                     shares = float(position['quantity'])
+                    last_price = float(get_stock_price(ticker))
                     order_data = {
                         "class": "equity",
                         "symbol": ticker,
@@ -795,27 +821,31 @@ def sell_all_shares_tradier():
                         data=order_data
                     )
 
-                    if order_response.status_code == 200 and 'order' in order_response.json():
-                        profit = shares * float(get_stock_price(ticker))
-                        total_profit += profit
-                        message = f"Sold {shares} shares of {ticker}."
-                        result_messages.append(message)
-                        tickers_to_remove.append(ticker)
+                    if order_response.status_code == 200:
+                        order_result = order_response.json()
+                        if 'order' in order_result:
+                            profit = shares * last_price
+                            total_profit += profit
+                            message = f"Sold {shares} shares of {ticker} at ${last_price}."
+                            result_messages.append(message)
+                            tickers_to_remove.append(ticker)
+                        else:
+                            raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_response.text}")
                     else:
-                        raise ValueError(f"Failed to sell shares of {ticker}. Order result: {order_response.text}")
+                        raise ValueError(f"Failed to sell shares of {ticker}. Order response: {order_response.text}")
                 else:
                     message = f"{ticker} not in account, checking again tomorrow."
                     result_messages.append(message)
             except Exception as e:
                 error_message = f"Failed to sell shares of {ticker} on Tradier: {e}"
                 result_messages.append(error_message)
-        
+
         remaining_tickers = [ticker for ticker in tickers if ticker not in tickers_to_remove]
         write_tickers(tradier_json_file_path, remaining_tickers)
 
         if not result_messages:
             result_messages.append("No stocks are currently bought.")
-        
+
         return "\n".join(result_messages), total_profit
     except Exception as e:
         return f"Failed to process Tradier shares: {e}", total_profit
@@ -956,6 +986,7 @@ def get_buying_power_firstrade():
             total_stock_value += stock_value
         
         cash_balance = cash_float - total_stock_value
+        print(cash_balance)
         return cash_balance
     
     except Exception as e:
@@ -982,14 +1013,6 @@ def get_buying_power_tradier(tradier_API_key):
     except Exception as e:
         print(f"Failed to get cash balance from Tradier: {e}")
         return 'x'
-
-# Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
-async def schedule_tasks():
-    schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
-    schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
-    while True:
-        schedule.run_pending()
-        await asyncio.sleep(1)
 
 @bot.command()
 async def total(ctx):
@@ -1064,6 +1087,8 @@ async def total(ctx):
         }
         response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/positions", headers=headers)
         tradier_positions = response.json().get('positions', {}).get('position', [])
+        if isinstance(tradier_positions, dict):
+            tradier_positions = [tradier_positions]
         SCHG_value = sum(float(pos['quantity']) * float(get_stock_price(pos['symbol'])) for pos in tradier_positions if pos['symbol'] == 'SCHG')
         total_value += SCHG_value
         total_message += f"{emojis['Tradier']} Tradier: ${SCHG_value:.2f} - SCHG\n"
@@ -1077,6 +1102,14 @@ async def total(ctx):
     embed = discord.Embed(title="Portfolio Summary", description=final_message, color=0xffd700)
     await ctx.send(embed=embed)
     print(final_message)
+
+# Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
+async def schedule_tasks():
+    schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
+    schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
+    while True:
+        schedule.run_pending()
+        await asyncio.sleep(1)
 
 async def main():
     await bot.start(discord_token)
