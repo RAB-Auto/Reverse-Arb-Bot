@@ -122,12 +122,9 @@ def is_today_holiday(holidays):
 
 # Start the brokerages that need to be ran
 wb = webull()
-try:
-    ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
-    ft_order = order.Order(ft_ss)
-    ft_accounts = account.FTAccountData(ft_ss)
-except Exception as e:
-    print(e)
+ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+ft_order = order.Order(ft_ss)
+ft_accounts = account.FTAccountData(ft_ss)
 
 @bot.event
 async def on_ready():
