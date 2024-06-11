@@ -120,68 +120,27 @@ def is_today_holiday(holidays):
     today = datetime.today().strftime('%Y-%m-%d')
     return today in holidays
 
-# Start the brokerages that need to be ran
+# Start the brokerages that need to be run
 wb = webull()
-ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
-ft_order = order.Order(ft_ss)
-ft_accounts = account.FTAccountData(ft_ss)
 
-@bot.event
-async def on_ready():
-    print(f'We have logged in as {bot.user}')
-    
-    embed = discord.Embed(title="Login Statuses", color=0x800080)
-    
-    try:
-        r.login(robinhood_email, robinhood_password)
-        embed.add_field(name="RobinHood", value="✅ Logged in successfully to RobinHood!", inline=False)
-    except Exception as e:
-        embed.add_field(name="RobinHood", value=f"❌ RobinHood login failed: {e}", inline=False)
-
-    try:
-        public = Public()
-        public.login(username=public_username, password=public_password, wait_for_2fa=True)
-        embed.add_field(name="Public", value="✅ Logged in successfully to Public!", inline=False)
-    except Exception as e:
-        embed.add_field(name="Public", value=f"❌ Public login failed: {e}", inline=False)
-
-    try:
-        wb.login(webull_number, webull_password)
-        login_result = wb.login(webull_number, webull_password)
-        
-        if 'accessToken' in login_result:
-            embed.add_field(name="Webull", value="✅ Logged in successfully to Webull!", inline=False)
-        else:
-            embed.add_field(name="Webull", value="❌ Webull login failed: Access token not found in the response.", inline=False)
-    except Exception as e:
-        embed.add_field(name="Webull", value=f"❌ Webull login failed: {e}", inline=False)
-
+max_retries = 3
+retries = 0
+logged_in = False
+while retries < max_retries and not logged_in:
     try:
         ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
-        embed.add_field(name="Firstrade", value="✅ Logged in successfully to Firstrade!", inline=False)
+        print("Logged in to Firstrade successfully")
+        logged_in = True
     except Exception as e:
-        embed.add_field(name="Firstrade", value=f"❌ Firstrade login failed: {e}", inline=False)
+        retries += 1
+        print(f"Firstrade initial login failed: {e}. Retrying {retries}/{max_retries}...")
+        time.sleep(2)  # Wait before retrying
 
-    try:
-        api_key = tradier_API_key
-        account_id = tradier_account_ID
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/json"
-        }
-        response = requests.get(f"https://api.tradier.com/v1/accounts/{account_id}/balances", headers=headers)
-        
-        if response.status_code == 200:
-            embed.add_field(name="Tradier", value="✅ Logged in successfully to Tradier!", inline=False)
-        else:
-            embed.add_field(name="Tradier", value=f"❌ Tradier login failed: {response.status_code} - {response.text}", inline=False)
-    except Exception as e:
-        embed.add_field(name="Tradier", value=f"❌ Tradier login failed: {e}", inline=False)
+if not logged_in:
+    raise Exception(f"Firstrade initial login failed after {max_retries} attempts.")
 
-    output_channel = bot.get_channel(alerts_channel_id)
-    await output_channel.send(embed=embed)
-    
-    asyncio.create_task(schedule_tasks())
+ft_order = order.Order(ft_ss)
+ft_accounts = account.FTAccountData(ft_ss)
 
 @bot.event
 async def on_ready():
@@ -220,13 +179,23 @@ async def on_ready():
         print(f"❌ Webull login failed: {e}")
         embed.add_field(name="Webull", value=f"❌ Webull login failed: {e}", inline=False)
 
-    try:
-        ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
-        print("✅ Logged in successfully to Firstrade!")
+    max_retries = 3
+    retries = 0
+    firstrade_login_success = False
+    while retries < max_retries and not firstrade_login_success:
+        try:
+            ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+            print("✅ Logged in successfully to Firstrade!")
+            firstrade_login_success = True
+        except Exception as e:
+            retries += 1
+            print(f"❌ Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+            time.sleep(2)  # Wait before retrying
+
+    if firstrade_login_success:
         embed.add_field(name="Firstrade", value="✅ Logged in successfully to Firstrade!", inline=False)
-    except Exception as e:
-        print(f"❌ Firstrade login failed: {e}")
-        embed.add_field(name="Firstrade", value=f"❌ Firstrade login failed: {e}", inline=False)
+    else:
+        embed.add_field(name="Firstrade", value=f"❌ Firstrade login failed after {max_retries} attempts.", inline=False)
 
     try:
         api_key = tradier_API_key
@@ -1156,15 +1125,32 @@ async def total(ctx):
         print(f"Error fetching Webull data: {e}")
 
     # Firstrade
-    try:
-        ft_positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
-        VUG_value = sum(float(pos['quantity']) * float(pos['price']) for ticker, pos in ft_positions.items() if ticker == 'VUG')
-        total_value += VUG_value
-        total_message += f"{emojis['Firstrade']} Firstrade: ${VUG_value:.2f} - VUG\n"
-        print(f"Firstrade VUG value: ${VUG_value:.2f}")
-    except Exception as e:
-        total_message += f"{emojis['Firstrade']} Firstrade: Error fetching data ({e})\n"
-        print(f"Error fetching Firstrade data: {e}")
+    max_retries = 3
+    retries = 0
+    firstrade_login_success = False
+    while retries < max_retries and not firstrade_login_success:
+        try:
+            ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+            firstrade_login_success = True
+        except Exception as e:
+            retries += 1
+            print(f"❌ Firstrade login failed for total command: {e}. Retrying {retries}/{max_retries}...")
+            time.sleep(2)  # Wait before retrying
+
+    if firstrade_login_success:
+        try:
+            ft_accounts = account.FTAccountData(ft_ss)
+            ft_positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
+            VUG_value = sum(float(pos['quantity']) * float(pos['price']) for ticker, pos in ft_positions.items() if ticker == 'VUG')
+            total_value += VUG_value
+            total_message += f"{emojis['Firstrade']} Firstrade: ${VUG_value:.2f} - VUG\n"
+            print(f"Firstrade VUG value: ${VUG_value:.2f}")
+        except Exception as e:
+            total_message += f"{emojis['Firstrade']} Firstrade: Error fetching data ({e})\n"
+            print(f"Error fetching Firstrade data: {e}")
+    else:
+        total_message += f"{emojis['Firstrade']} Firstrade: Login failed after {max_retries} attempts.\n"
+        print(f"Firstrade login failed for total command after {max_retries} attempts.")
 
     # Tradier
     try:
