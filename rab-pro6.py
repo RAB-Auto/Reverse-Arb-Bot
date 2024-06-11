@@ -335,6 +335,22 @@ def buy_stock_webull(ticker):
         return {"success": False, "detail": str(e)}
 
 def buy_stock_firstrade(ticker):
+    max_retries = 3
+    retries = 0
+    logged_in = False
+    while retries < max_retries and not logged_in:
+        try:
+            ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+            print("Logged in to Firstrade successfully")
+            logged_in = True
+        except Exception as e:
+            retries += 1
+            print(f"Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+            time.sleep(2)  # Wait before retrying
+
+    if not logged_in:
+        return {"success": False, "detail": f"Firstrade login failed after {max_retries} attempts."}
+
     ft_order = order.Order(ft_ss)
     ft_accounts = account.FTAccountData(ft_ss)
 
@@ -369,7 +385,7 @@ def buy_stock_firstrade(ticker):
             except:
                 pass
         return {"success": False, "detail": error_message}
-    
+
 def buy_stock_tradier(api_key, account_id, symbol):
     url = "https://api.tradier.com/v1/accounts/{}/orders".format(account_id)
     
@@ -489,7 +505,22 @@ def buy_SCHG_webull():
         return {"success": False, "detail": str(e)}
     
 def buy_VUG_firstrade():
-    ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+    max_retries = 3
+    retries = 0
+    logged_in = False
+    while retries < max_retries and not logged_in:
+        try:
+            ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+            print("Logged in to Firstrade successfully")
+            logged_in = True
+        except Exception as e:
+            retries += 1
+            print(f"Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+            time.sleep(2)  # Wait before retrying
+
+    if not logged_in:
+        return {"success": False, "detail": f"Firstrade login failed after {max_retries} attempts."}
+
     ft_order = order.Order(ft_ss)
     ft_accounts = account.FTAccountData(ft_ss)
     try:
@@ -710,10 +741,26 @@ def sell_all_shares_webull():
         return f"Failed to process Webull shares: {e}", total_profit
 
 def sell_all_shares_firstrade():
-    ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+    max_retries = 3
+    retries = 0
+    logged_in = False
+    while retries < max_retries and not logged_in:
+        try:
+            ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+            print("Logged in to Firstrade successfully")
+            logged_in = True
+        except Exception as e:
+            retries += 1
+            print(f"Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+            time.sleep(2)  # Wait before retrying
+
+    if not logged_in:
+        return f"Firstrade login failed after {max_retries} attempts.", 0
+
     ft_order = order.Order(ft_ss)
     ft_accounts = account.FTAccountData(ft_ss)
     total_profit = 0
+
     try:
         tickers = read_tickers(firstrade_json_file_path)
         result_messages = []
@@ -733,7 +780,7 @@ def sell_all_shares_firstrade():
                     shares = int(position['quantity'])
                     last_price = float(position['price'])
                     current_price = get_stock_price(ticker)
-                    
+
                     # Attempt to sell at market price if current price is more than $1
                     if current_price > 1:
                         try:
@@ -785,13 +832,13 @@ def sell_all_shares_firstrade():
             except Exception as e:
                 error_message = f"Failed to sell shares of {ticker} on Firstrade: {e}"
                 result_messages.append(error_message)
-        
+
         remaining_tickers = [ticker for ticker in tickers if ticker not in tickers_to_remove]
         write_tickers(firstrade_json_file_path, remaining_tickers)
 
         if not result_messages:
             result_messages.append("No stocks are currently bought.")
-        
+
         return "\n".join(result_messages), total_profit
     except Exception as e:
         return f"Failed to process Firstrade shares: {e}", total_profit
@@ -996,12 +1043,27 @@ def get_buying_power_webull():
         return 'x'
 
 def get_buying_power_firstrade():
+    max_retries = 3
+    retries = 0
+    logged_in = False
+    while retries < max_retries and not logged_in:
+        try:
+            ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+            print("Logged in to Firstrade successfully")
+            logged_in = True
+        except Exception as e:
+            retries += 1
+            print(f"Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+            time.sleep(2)  # Wait before retrying
+
+    if not logged_in:
+        raise Exception(f"Firstrade login failed after {max_retries} attempts.")
+
     try:
-        cash = ft_accounts.account_balances[0]
-        cash_float = float(cash.replace('$', '').replace(',', ''))
+        ft_accounts = account.FTAccountData(ft_ss)
+        cash_balance = float(ft_accounts.account_balances[0].replace('$', '').replace(',', ''))
         
         positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
-        
         total_stock_value = 0.0
         
         for symbol, data in positions.items():
@@ -1010,8 +1072,9 @@ def get_buying_power_firstrade():
             stock_value = quantity * price
             total_stock_value += stock_value
         
-        cash_balance = cash_float - total_stock_value
-        return cash_balance
+        buying_power = cash_balance - total_stock_value
+        print(buying_power)
+        return buying_power
     
     except Exception as e:
         print(f"Failed to get cash balance from Firstrade: {e}")
