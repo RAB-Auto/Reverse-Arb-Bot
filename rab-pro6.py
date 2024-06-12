@@ -120,6 +120,23 @@ def is_today_holiday(holidays):
     today = datetime.today().strftime('%Y-%m-%d')
     return today in holidays
 
+# Add and remove functions for tickers
+def add_ticker(ticker, file_path):
+    tickers = read_tickers(file_path)
+    if ticker not in tickers:
+        tickers.append(ticker)
+        write_tickers(file_path, tickers)
+        return True
+    return False
+
+def remove_ticker(ticker, file_path):
+    tickers = read_tickers(file_path)
+    if ticker in tickers:
+        tickers.remove(ticker)
+        write_tickers(file_path, tickers)
+        return True
+    return False
+
 # Start the brokerages that need to be run
 wb = webull()
 
@@ -220,6 +237,41 @@ async def on_ready():
     await output_channel.send(embed=embed)
     
     asyncio.create_task(schedule_tasks())
+
+@bot.event
+async def on_message(message):
+    if message.channel.id == buy_channel_id and message.content.startswith('$'):
+        ticker = message.content[1:].strip().upper()
+        print(f"Processing ticker: {ticker}")
+        robinhood_result = None
+        public_result = None
+        webull_result = None
+        firstrade_result = None
+        tradier_result = None
+        try:
+            robinhood_result = buy_stock_robinhood(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Robinhood: {e}")
+        try:
+            public_result = buy_stock_public(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Public: {e}")
+        try:
+            webull_result = buy_stock_webull(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Webull: {e}")
+        try:
+            firstrade_result = buy_stock_firstrade(ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Firstrade: {e}")
+        try:
+            tradier_result = buy_stock_tradier(tradier_API_key, tradier_account_ID, ticker)
+        except Exception as e:
+            print(f"Failed to place order for {ticker} on Tradier: {e}")
+
+        await send_order_message(message.channel, ticker, robinhood_result, public_result, webull_result, firstrade_result, tradier_result)
+
+    await bot.process_commands(message)
 
 def get_stock_price(symbol: str):
     stock = yf.Ticker(symbol)
@@ -629,7 +681,7 @@ def sell_all_shares_public():
                 if any(position['instrument']['symbol'] == ticker for position in positions):
                     position = next(position for position in positions if position['instrument']['symbol'] == ticker)
                     shares = float(position['quantity'])
-                    last_price = public.get_symbol_price(ticker)
+                    last_price = float(public.get_symbol_price(ticker))
                     order_result = public.place_order(
                         symbol=ticker,
                         quantity=shares,
@@ -1175,6 +1227,275 @@ async def total(ctx):
     embed = discord.Embed(title="Portfolio Summary", description=final_message, color=0xffd700)
     await ctx.send(embed=embed)
     print(final_message)
+
+@bot.command()
+async def add(ctx, ticker: str, brokerage: str = None):
+    ticker = ticker.upper()
+    brokerage = brokerage.capitalize() if brokerage else None
+    brokerages = {
+        "Robinhood": robinhood_json_file_path,
+        "Public": public_json_file_path,
+        "Webull": webull_json_file_path,
+        "Firstrade": firstrade_json_file_path,
+        "Tradier": tradier_json_file_path,
+    }
+    
+    if brokerage:
+        if brokerage in brokerages:
+            added = add_ticker(ticker, brokerages[brokerage])
+            embed = discord.Embed(title=f"Add Ticker Status - {brokerage}", color=0x00ff00)
+            status = "✅" if added else "❌ Already exists"
+            embed.add_field(name=brokerage, value=status, inline=False)
+        else:
+            embed = discord.Embed(title="Error", description="Invalid brokerage specified.", color=0xff0000)
+    else:
+        added = {key: add_ticker(ticker, path) for key, path in brokerages.items()}
+        embed = discord.Embed(title="Add Ticker Status", color=0x00ff00)
+        for key, value in added.items():
+            status = "✅" if value else "❌ Already exists"
+            embed.add_field(name=key, value=status, inline=False)
+    
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def remove(ctx, ticker: str, brokerage: str = None):
+    ticker = ticker.upper()
+    brokerage = brokerage.capitalize() if brokerage else None
+    brokerages = {
+        "Robinhood": robinhood_json_file_path,
+        "Public": public_json_file_path,
+        "Webull": webull_json_file_path,
+        "Firstrade": firstrade_json_file_path,
+        "Tradier": tradier_json_file_path,
+    }
+    
+    if brokerage:
+        if brokerage in brokerages:
+            removed = remove_ticker(ticker, brokerages[brokerage])
+            embed = discord.Embed(title=f"Remove Ticker Status - {brokerage}", color=0xff0000)
+            status = "✅" if removed else "❌ Not found"
+            embed.add_field(name=brokerage, value=status, inline=False)
+        else:
+            embed = discord.Embed(title="Error", description="Invalid brokerage specified.", color=0xff0000)
+    else:
+        removed = {key: remove_ticker(ticker, path) for key, path in brokerages.items()}
+        embed = discord.Embed(title="Remove Ticker Status", color=0xff0000)
+        for key, value in removed.items():
+            status = "✅" if value else "❌ Not found"
+            embed.add_field(name=key, value=status, inline=False)
+    
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def portfolio(ctx, brokerage: str = None):
+    if ctx.channel.id != command_channel_id:
+        await ctx.send(f"This command can only be used in the designated command channel: <#{command_channel_id}>")
+        return
+
+    emojis = {
+        'Robinhood': '📈',
+        'Public': '🌐',
+        'Webull': '📊',
+        'Firstrade': '💹',
+        'Tradier': '💱'
+    }
+
+    brokerages = {
+        'Robinhood': 'robinhood',
+        'Public': 'public',
+        'Webull': 'webull',
+        'Firstrade': 'firstrade',
+        'Tradier': 'tradier'
+    }
+
+    total_value = 0
+    embed = discord.Embed(title="💼 Portfolio Summary", color=0x025669)
+
+    def get_robinhood_portfolio():
+        positions = r.build_holdings()
+        cash = float(r.profiles.load_account_profile().get("buying_power", 0))
+        stock_details = []
+        arbitrage_stocks = []
+        total_stock_value = 0
+        arbitrage_tickers = read_tickers(robinhood_json_file_path)
+
+        for ticker, pos in positions.items():
+            quantity = float(pos['quantity'])
+            price = float(pos['price'])
+            stock_value = quantity * price
+            if ticker == 'VUG':
+                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+            elif ticker in arbitrage_tickers:
+                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+
+        total_value = cash + total_stock_value
+        return cash, stock_details, arbitrage_stocks, total_value
+
+    def get_public_portfolio():
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+        positions = public.get_positions()
+        cash = float(public.get_portfolio()["equity"]["cash"])
+        stock_details = []
+        arbitrage_stocks = []
+        total_stock_value = 0
+        arbitrage_tickers = read_tickers(public_json_file_path)
+
+        for pos in positions:
+            ticker = pos['instrument']['symbol']
+            quantity = float(pos['quantity'])
+            price = float(public.get_symbol_price(ticker))
+            stock_value = quantity * price
+            if ticker == 'VUG':
+                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+            elif ticker in arbitrage_tickers:
+                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+
+        total_value = cash + total_stock_value
+        return cash, stock_details, arbitrage_stocks, total_value
+
+    def get_webull_portfolio():
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+        positions = wb.get_positions()
+        cash = float(wb.get_account()['netLiquidation'])  # Use net liquidation value to get the correct balance
+        stock_details = []
+        arbitrage_stocks = []
+        total_stock_value = 0
+        arbitrage_tickers = read_tickers(webull_json_file_path)
+
+        for pos in positions:
+            ticker = pos['ticker']['symbol']
+            quantity = float(pos['position'])
+            price = float(pos['lastPrice'])
+            stock_value = quantity * price
+            if ticker == 'SCHG':
+                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+            elif ticker in arbitrage_tickers:
+                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+
+        total_value = cash + total_stock_value
+        return cash, stock_details, arbitrage_stocks, total_value
+
+    def get_firstrade_portfolio():
+        max_retries = 3
+        retries = 0
+        logged_in = False
+        while retries < max_retries and not logged_in:
+            try:
+                ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+                ft_accounts = account.FTAccountData(ft_ss)
+                logged_in = True
+            except Exception as e:
+                retries += 1
+                print(f"Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+                time.sleep(2)  # Wait before retrying
+
+        if not logged_in:
+            raise Exception(f"Firstrade login failed after {max_retries} attempts.")
+
+        try:
+            cash = float(ft_accounts.account_balances[0].replace('$', '').replace(',', ''))
+            positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
+            stock_details = []
+            arbitrage_stocks = []
+            total_stock_value = 0
+            arbitrage_tickers = read_tickers(firstrade_json_file_path)
+
+            for ticker, data in positions.items():
+                quantity = float(data['quantity'].replace(',', ''))
+                price = float(data['price'].replace('+', '').replace(',', ''))
+                stock_value = quantity * price
+                if ticker == 'VUG':
+                    stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    total_stock_value += stock_value
+                elif ticker in arbitrage_tickers:
+                    arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    total_stock_value += stock_value
+
+            cash_balance = cash - total_stock_value
+            total_value = cash_balance + total_stock_value
+            return cash_balance, stock_details, arbitrage_stocks, total_value
+
+        except Exception as e:
+            print(f"Failed to get Firstrade portfolio: {e}")
+            return 0, [], [], 0
+
+    def get_tradier_portfolio():
+        headers = {
+            "Authorization": f"Bearer {tradier_API_key}",
+            "Accept": "application/json"
+        }
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/balances", headers=headers)
+        cash = float(response.json()['balances']['cash']['cash_available'])
+
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/positions", headers=headers)
+        positions = response.json().get('positions', {}).get('position', [])
+        if isinstance(positions, dict):
+            positions = [positions]
+
+        stock_details = []
+        arbitrage_stocks = []
+        total_stock_value = 0
+        arbitrage_tickers = read_tickers(tradier_json_file_path)
+
+        for pos in positions:
+            ticker = pos['symbol']
+            quantity = float(pos['quantity'])
+            price = get_stock_price(ticker)
+            stock_value = quantity * price
+            if ticker == 'SCHG':
+                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+            elif ticker in arbitrage_tickers:
+                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                total_stock_value += stock_value
+
+        total_value = cash + total_stock_value
+        return cash, stock_details, arbitrage_stocks, total_value
+
+    def format_portfolio(brokerage, cash, stock_details, arbitrage_stocks, total_value):
+        details = "\n".join(stock_details)
+        arbitrage_details = "\n".join(arbitrage_stocks)
+        message = f"{emojis[brokerage]} {brokerage}:\nCash: ${cash:.2f}\n"
+        if arbitrage_details:
+            message += f"\nReverse Split Arbitrage:\n{arbitrage_details}\n"
+        if details:
+            message += f"\nLong Term:\n{details}\n"
+        message += f"\nTotal {brokerage} Value: ${total_value:.2f}\n"
+        return message
+
+    async def send_portfolio_summary(brokerage, get_portfolio_func):
+        try:
+            cash, stock_details, arbitrage_stocks, portfolio_value = get_portfolio_func()
+            total_message = format_portfolio(brokerage, cash, stock_details, arbitrage_stocks, portfolio_value)
+            embed.add_field(name=f"{brokerage} Portfolio", value=total_message, inline=True)
+            return portfolio_value
+        except Exception as e:
+            error_message = f"{emojis[brokerage]} {brokerage}: Error fetching data ({e})\n"
+            embed.add_field(name=f"{brokerage} Portfolio", value=error_message, inline=True)
+            return 0
+
+    if brokerage:
+        brokerage = brokerage.capitalize()
+        if brokerage in brokerages:
+            total_value += await send_portfolio_summary(brokerage, locals()[f"get_{brokerages[brokerage]}_portfolio"])
+        else:
+            await ctx.send("Invalid brokerage specified. Please choose from: Robinhood, Public, Webull, Firstrade, Tradier.")
+            return
+    else:
+        for brokerage in brokerages:
+            total_value += await send_portfolio_summary(brokerage, locals()[f"get_{brokerages[brokerage]}_portfolio"])
+
+        embed.add_field(name="Total Portfolio Value", value=f"💰 ${total_value:.2f}", inline=False)
+
+    await ctx.send(embed=embed)
 
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
