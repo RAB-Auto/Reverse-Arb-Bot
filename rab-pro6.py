@@ -166,7 +166,7 @@ ft_accounts = account.FTAccountData(ft_ss)
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Game(name="On AWS Server 🖥️"))
+    await bot.change_presence(activity=discord.Game(name="Free Money 💰"))
     await bot.tree.sync()
     print(f'We have logged in as {bot.user}')
     
@@ -1807,6 +1807,131 @@ async def portfolio(ctx, brokerage: str = None):
         embed.add_field(name="Total Portfolio Value", value=f"💰 ${total_value:.2f}", inline=False)
 
     await ctx.send(embed=embed)
+
+@bot.tree.command(name="buy_robinhood", description="Buy a stock on Robinhood")
+@app_commands.describe(ticker="The ticker symbol to buy")
+async def buy_robinhood_command(interaction: discord.Interaction, ticker: str):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"Initiating buy for {ticker} on Robinhood...")
+    result = buy_stock_robinhood(ticker)
+    if result and 'id' in result:
+        await interaction.edit_original_response(content=f"Completed buy for {ticker} on Robinhood.")
+    else:
+        await interaction.edit_original_response(content=f"Failed to buy {ticker} on Robinhood: {result.get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="buy_public", description="Buy a stock on Public")
+@app_commands.describe(ticker="The ticker symbol to buy")
+async def buy_public_command(interaction: discord.Interaction, ticker: str):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"Initiating buy for {ticker} on Public...")
+    result = buy_stock_public(ticker)
+    if result.get('success', False):
+        await interaction.edit_original_response(content=f"Completed buy for {ticker} on Public.")
+    else:
+        await interaction.edit_original_response(content=f"Failed to buy {ticker} on Public: {result.get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="buy_webull", description="Buy a stock on Webull")
+@app_commands.describe(ticker="The ticker symbol to buy")
+async def buy_webull_command(interaction: discord.Interaction, ticker: str):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"Initiating buy for {ticker} on Webull...")
+    result = buy_stock_webull(ticker)
+    if result.get('success', False):
+        await interaction.edit_original_response(content=f"Completed buy for {ticker} on Webull.")
+    else:
+        await interaction.edit_original_response(content=f"Failed to buy {ticker} on Webull: {result.get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="buy_firstrade", description="Buy a stock on Firstrade")
+@app_commands.describe(ticker="The ticker symbol to buy")
+async def buy_firstrade_command(interaction: discord.Interaction, ticker: str):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"Initiating buy for {ticker} on Firstrade...")
+    result = buy_stock_firstrade(ticker)
+    if result.get('success', False) == 'Yes':
+        await interaction.edit_original_response(content=f"Completed buy for {ticker} on Firstrade.")
+    else:
+        await interaction.edit_original_response(content=f"Failed to buy {ticker} on Firstrade: {result.get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="buy_tradier", description="Buy a stock on Tradier")
+@app_commands.describe(ticker="The ticker symbol to buy")
+async def buy_tradier_command(interaction: discord.Interaction, ticker: str):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"Initiating buy for {ticker} on Tradier...")
+    result = buy_stock_tradier(tradier_API_key, tradier_account_ID, ticker)
+    if result.get('success', False):
+        await interaction.edit_original_response(content=f"Completed buy for {ticker} on Tradier.")
+    else:
+        await interaction.edit_original_response(content=f"Failed to buy {ticker} on Tradier: {result.get('detail', 'Unknown error')}")
+
+@bot.tree.command(name="buy_growth_etfs", description="Manually buy VUG on all brokerages")
+async def buy_vug_command(interaction: discord.Interaction):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    await interaction.response.send_message("Initiating manual VUG buy...")
+    await buy_VUG()
+    await interaction.edit_original_response(content="Completed manual VUG buy. <#1241468924034416691>")
+
+@bot.tree.command(name="sell_all_stocks", description="Sell all stocks on a specified brokerage")
+@app_commands.describe(brokerage="Specify the brokerage to sell all stocks (optional)")
+async def sell_all_stocks_command(interaction: discord.Interaction, brokerage: str = None):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    await interaction.response.send_message(f"Initiating sell of all stocks{' on ' + brokerage if brokerage else ''}...")
+
+    messages = []
+
+    if brokerage:
+        brokerage = brokerage.lower()
+        if brokerage == "robinhood":
+            message, _ = sell_all_shares_robinhood()
+            messages.append(f"Robinhood:\n{message}")
+        elif brokerage == "public":
+            message, _ = sell_all_shares_public()
+            messages.append(f"Public:\n{message}")
+        elif brokerage == "webull":
+            message, _ = sell_all_shares_webull()
+            messages.append(f"Webull:\n{message}")
+        elif brokerage == "firstrade":
+            message, _ = sell_all_shares_firstrade()
+            messages.append(f"Firstrade:\n{message}")
+        elif brokerage == "tradier":
+            message, _ = sell_all_shares_tradier()
+            messages.append(f"Tradier:\n{message}")
+        else:
+            await interaction.edit_original_response(content=f"Invalid brokerage specified: {brokerage}")
+            return
+    else:
+        message, _ = sell_all_shares_robinhood()
+        messages.append(f"Robinhood:\n{message}")
+        message, _ = sell_all_shares_public()
+        messages.append(f"Public:\n{message}")
+        message, _ = sell_all_shares_webull()
+        messages.append(f"Webull:\n{message}")
+        message, _ = sell_all_shares_firstrade()
+        messages.append(f"Firstrade:\n{message}")
+        message, _ = sell_all_shares_tradier()
+        messages.append(f"Tradier:\n{message}")
+
+    await interaction.edit_original_response(content=f"Completed sell of all stocks.\n\n" + "\n\n".join(messages))
 
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
