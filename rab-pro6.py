@@ -161,6 +161,7 @@ ft_accounts = account.FTAccountData(ft_ss)
 
 @bot.event
 async def on_ready():
+    await bot.change_presence(activity=discord.Game(name="On AWS Server 🖥️"))
     print(f'We have logged in as {bot.user}')
     
     embed = discord.Embed(title="Login Statuses 🤖", color=0x800080)
@@ -285,6 +286,7 @@ def get_stock_price(symbol: str):
 
 def buy_stock_robinhood(ticker):
     try:
+        r.login(robinhood_email, robinhood_password)
         order_result = r.order_buy_market(ticker, 1)
         print(f"Robinhood order result: {order_result}")  # Debug log
         if 'id' in order_result:
@@ -337,9 +339,11 @@ def buy_stock_webull(ticker):
         if price <= 0.99:
             if price <= 0.1:
                 order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="MKT", quant=1000, enforce="DAY")
+                time.sleep(5)
                 order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="MKT", quant=999, enforce="DAY")
             else:
                 order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="MKT", quant=100, enforce="DAY")
+                time.sleep(5)
                 order_result_sell = wb.place_order(action="SELL", stock=ticker, orderType="MKT", quant=99, enforce="DAY")
         else:
             order_result_buy = wb.place_order(action="BUY", stock=ticker, orderType="MKT", quant=1, enforce="DAY")
@@ -460,6 +464,7 @@ async def send_order_message(channel, ticker, robinhood_result, public_result, w
 
 def buy_VUG_robinhood():
     try:
+        r.login(robinhood_email, robinhood_password)
         buying_power = float(get_buying_power_robinhood())
         purchase_balance = buying_power - 5.0
         if purchase_balance < 1:
@@ -631,6 +636,7 @@ def sell_all_shares_robinhood():
 
     for ticker in tickers:
         try:
+            r.login(robinhood_email, robinhood_password)
             positions = r.build_holdings()
             if ticker in positions:
                 shares = float(positions[ticker]['quantity'])
@@ -1312,23 +1318,27 @@ async def portfolio(ctx, brokerage: str = None):
     embed = discord.Embed(title="💼 Portfolio Summary", color=0x025669)
 
     def get_robinhood_portfolio():
+        r.login(robinhood_email, robinhood_password)
         positions = r.build_holdings()
         cash = float(r.profiles.load_account_profile().get("buying_power", 0))
         stock_details = []
         arbitrage_stocks = []
         total_stock_value = 0
-        arbitrage_tickers = read_tickers(robinhood_json_file_path)
+        arbitrage_tickers = set(read_tickers(robinhood_json_file_path))
 
         for ticker, pos in positions.items():
-            quantity = float(pos['quantity'])
-            price = float(pos['price'])
-            stock_value = quantity * price
-            if ticker == 'VUG':
-                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
-            elif ticker in arbitrage_tickers:
-                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
+            try:
+                quantity = float(pos.get('quantity', 0))
+                price = float(pos.get('price', 0))
+                stock_value = quantity * price
+                if ticker == 'VUG' or ticker in arbitrage_tickers:
+                    if ticker == 'VUG':
+                        stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    else:
+                        arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    total_stock_value += stock_value
+            except Exception as e:
+                print(f"Error processing ticker {ticker} in Robinhood: {e}")
 
         total_value = cash + total_stock_value
         return cash, stock_details, arbitrage_stocks, total_value
@@ -1341,19 +1351,31 @@ async def portfolio(ctx, brokerage: str = None):
         stock_details = []
         arbitrage_stocks = []
         total_stock_value = 0
-        arbitrage_tickers = read_tickers(public_json_file_path)
+        arbitrage_tickers = set(read_tickers(public_json_file_path))
 
         for pos in positions:
-            ticker = pos['instrument']['symbol']
-            quantity = float(pos['quantity'])
-            price = float(public.get_symbol_price(ticker))
-            stock_value = quantity * price
-            if ticker == 'VUG':
-                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
-            elif ticker in arbitrage_tickers:
-                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
+            try:
+                ticker = pos['instrument']['symbol']
+                quantity_str = pos.get('quantity', '0')
+                price_str = public.get_symbol_price(ticker)
+                if price_str is None:
+                    continue
+
+                # Convert both quantity and price to float
+                quantity = float(quantity_str.replace(',', ''))
+                price = float(price_str.replace(',', ''))
+                stock_value = quantity * price
+
+                if ticker == 'VUG' or ticker in arbitrage_tickers:
+                    if ticker == 'VUG':
+                        stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    else:
+                        arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    total_stock_value += stock_value
+            except ValueError as ve:
+                print(f"ValueError processing ticker {ticker} in Public: {ve}")
+            except Exception as e:
+                print(f"Error processing ticker {ticker} in Public: {e}")
 
         total_value = cash + total_stock_value
         return cash, stock_details, arbitrage_stocks, total_value
@@ -1366,19 +1388,22 @@ async def portfolio(ctx, brokerage: str = None):
         stock_details = []
         arbitrage_stocks = []
         total_stock_value = 0
-        arbitrage_tickers = read_tickers(webull_json_file_path)
+        arbitrage_tickers = set(read_tickers(webull_json_file_path))
 
         for pos in positions:
-            ticker = pos['ticker']['symbol']
-            quantity = float(pos['position'])
-            price = float(pos['lastPrice'])
-            stock_value = quantity * price
-            if ticker == 'SCHG':
-                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
-            elif ticker in arbitrage_tickers:
-                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
+            try:
+                ticker = pos['ticker']['symbol']
+                quantity = float(pos.get('position', 0))
+                price = float(pos.get('lastPrice', 0))
+                stock_value = quantity * price
+                if ticker == 'SCHG' or ticker in arbitrage_tickers:
+                    if ticker == 'SCHG':
+                        stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    else:
+                        arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    total_stock_value += stock_value
+            except Exception as e:
+                print(f"Error processing ticker {ticker} in Webull: {e}")
 
         total_value = cash + total_stock_value
         return cash, stock_details, arbitrage_stocks, total_value
@@ -1406,18 +1431,21 @@ async def portfolio(ctx, brokerage: str = None):
             stock_details = []
             arbitrage_stocks = []
             total_stock_value = 0
-            arbitrage_tickers = read_tickers(firstrade_json_file_path)
+            arbitrage_tickers = set(read_tickers(firstrade_json_file_path))
 
             for ticker, data in positions.items():
-                quantity = float(data['quantity'].replace(',', ''))
-                price = float(data['price'].replace('+', '').replace(',', ''))
-                stock_value = quantity * price
-                if ticker == 'VUG':
-                    stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                    total_stock_value += stock_value
-                elif ticker in arbitrage_tickers:
-                    arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                    total_stock_value += stock_value
+                try:
+                    quantity = float(data.get('quantity', '0').replace(',', ''))
+                    price = float(data.get('price', '0').replace('+', '').replace(',', ''))
+                    stock_value = quantity * price
+                    if ticker == 'VUG' or ticker in arbitrage_tickers:
+                        if ticker == 'VUG':
+                            stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                        else:
+                            arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                        total_stock_value += stock_value
+                except Exception as e:
+                    print(f"Error processing ticker {ticker} in Firstrade: {e}")
 
             cash_balance = cash - total_stock_value
             total_value = cash_balance + total_stock_value
@@ -1443,19 +1471,24 @@ async def portfolio(ctx, brokerage: str = None):
         stock_details = []
         arbitrage_stocks = []
         total_stock_value = 0
-        arbitrage_tickers = read_tickers(tradier_json_file_path)
+        arbitrage_tickers = set(read_tickers(tradier_json_file_path))
 
         for pos in positions:
-            ticker = pos['symbol']
-            quantity = float(pos['quantity'])
-            price = get_stock_price(ticker)
-            stock_value = quantity * price
-            if ticker == 'SCHG':
-                stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
-            elif ticker in arbitrage_tickers:
-                arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
-                total_stock_value += stock_value
+            try:
+                ticker = pos['symbol']
+                quantity = float(pos.get('quantity', 0))
+                price = get_stock_price(ticker)
+                if price is None:
+                    continue
+                stock_value = quantity * price
+                if ticker == 'SCHG' or ticker in arbitrage_tickers:
+                    if ticker == 'SCHG':
+                        stock_details.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    else:
+                        arbitrage_stocks.append(f"{ticker}: {quantity} shares @ ${price:.2f} = ${stock_value:.2f}")
+                    total_stock_value += stock_value
+            except Exception as e:
+                print(f"Error processing ticker {ticker} in Tradier: {e}")
 
         total_value = cash + total_stock_value
         return cash, stock_details, arbitrage_stocks, total_value
