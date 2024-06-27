@@ -166,7 +166,7 @@ ft_accounts = account.FTAccountData(ft_ss)
 
 @bot.event
 async def on_ready():
-    await bot.change_presence(activity=discord.Game(name="Free Money 💰"))
+    await bot.change_presence(activity=discord.Game(name="On AWS Server 🖥️"))
     await bot.tree.sync()
     print(f'We have logged in as {bot.user}')
     
@@ -293,7 +293,7 @@ def get_stock_price(symbol: str):
 def buy_stock_robinhood(ticker):
     try:
         r.login(robinhood_email, robinhood_password)
-        order_result = r.order_buy_market(ticker, 1, 'gfd')
+        order_result = r.order_buy_market(ticker, 1, timeInForce='gtc')
         print(f"Robinhood order result: {order_result}")  # Debug log
         if 'id' in order_result:
             tickers = read_tickers(robinhood_json_file_path)
@@ -1805,6 +1805,365 @@ async def portfolio(ctx, brokerage: str = None):
             total_value += await send_portfolio_summary(brokerage, locals()[f"get_{brokerages[brokerage]}_portfolio"])
 
         embed.add_field(name="Total Portfolio Value", value=f"💰 ${total_value:.2f}", inline=False)
+
+    await ctx.send(embed=embed)
+
+@bot.tree.command(name="profit", description="Get the profit summary for specified or all brokerages")
+@app_commands.describe(brokerage="Specify the brokerage to view")
+async def profit(interaction: discord.Interaction, brokerage: str = None):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    emojis = {
+        'Robinhood': '📈',
+        'Public': '🌐',
+        'Webull': '📊',
+        'Firstrade': '💹',
+        'Tradier': '💱'
+    }
+
+    brokerages = {
+        'Robinhood': 'robinhood',
+        'Public': 'public',
+        'Webull': 'webull',
+        'Firstrade': 'firstrade',
+        'Tradier': 'tradier'
+    }
+
+    initial_investments = {
+        'Robinhood': float(0),  # Replace with actual initial investment
+        'Public': float(21),  # Replace with actual initial investment
+        'Webull': float(171),  # Replace with actual initial investment
+        'Firstrade': float(11),  # Replace with actual initial investment
+        'Tradier': float(11)  # Replace with actual initial investment
+    }
+
+    total_current_value = 0
+    total_initial_value = 0
+    total_profit = 0
+    embed = discord.Embed(title="📈 Profit Summary", color=0x252850)
+
+    def get_robinhood_portfolio():
+        r.login(robinhood_email, robinhood_password)
+        positions = r.build_holdings()
+        cash = float(r.profiles.load_account_profile().get("buying_power", 0))
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(robinhood_json_file_path))
+
+        for ticker, pos in positions.items():
+            quantity = float(pos.get('quantity', 0))
+            price = float(pos.get('price', 0))
+            stock_value = quantity * price
+            if ticker == 'VUG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    def get_public_portfolio():
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+        positions = public.get_positions()
+        cash = float(public.get_portfolio()["equity"]["cash"])
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(public_json_file_path))
+
+        for pos in positions:
+            ticker = pos['instrument']['symbol']
+            quantity = float(pos.get('quantity', 0))
+            price = float(public.get_symbol_price(ticker))
+            stock_value = quantity * price
+            if ticker == 'VUG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    def get_webull_portfolio():
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+        positions = wb.get_positions()
+        cash = float(wb.get_account()['netLiquidation'])
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(webull_json_file_path))
+
+        for pos in positions:
+            ticker = pos['ticker']['symbol']
+            quantity = float(pos.get('position', 0))
+            price = float(pos.get('lastPrice', 0))
+            stock_value = quantity * price
+            if ticker == 'SCHG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    def get_firstrade_portfolio():
+        max_retries = 3
+        retries = 0
+        logged_in = False
+        while retries < max_retries and not logged_in:
+            try:
+                ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+                ft_accounts = account.FTAccountData(ft_ss)
+                logged_in = True
+            except Exception as e:
+                retries += 1
+                print(f"Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+                time.sleep(2)  # Wait before retrying
+
+        account_balance = float(ft_accounts.account_balances[0].replace('$', '').replace(',', ''))
+        positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
+        total_stock_value = 0
+        arbitrage_tickers = set(read_tickers(firstrade_json_file_path))
+
+        for ticker, data in positions.items():
+            quantity = float(data.get('quantity', '0').replace(',', ''))
+            price = float(data.get('price', '0').replace('+', '').replace(',', ''))
+            stock_value = quantity * price
+            if ticker == 'VUG' or ticker in arbitrage_tickers:
+                total_stock_value += stock_value
+
+        cash = account_balance - total_stock_value
+        total_value = cash + total_stock_value
+        return total_value
+
+    def get_tradier_portfolio():
+        headers = {
+            "Authorization": f"Bearer {tradier_API_key}",
+            "Accept": "application/json"
+        }
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/balances", headers=headers)
+        cash = float(response.json()['balances']['cash']['cash_available'])
+
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/positions", headers=headers)
+        positions = response.json().get('positions', {}).get('position', [])
+        if isinstance(positions, dict):
+            positions = [positions]
+
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(tradier_json_file_path))
+
+        for pos in positions:
+            ticker = pos['symbol']
+            quantity = float(pos.get('quantity', 0))
+            price = get_stock_price(ticker)
+            if price is None:
+                continue
+            stock_value = quantity * price
+            if ticker == 'SCHG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    async def get_profit_summary(brokerage, get_portfolio_func):
+        try:
+            portfolio_value = get_portfolio_func()
+            initial_value = initial_investments[brokerage]
+            profit = portfolio_value - initial_value
+            total_message = f"{emojis[brokerage]} {brokerage}:\nCurrent Value: ${portfolio_value:.2f}\nInitial Value: ${initial_value:.2f}\nProfit: ${profit:.2f}\n"
+            embed.add_field(name=f"{brokerage} Profit", value=total_message, inline=True)
+            return portfolio_value, initial_value, profit
+        except Exception as e:
+            error_message = f"{emojis[brokerage]} {brokerage}: Error fetching data ({e})\n"
+            embed.add_field(name=f"{brokerage} Profit", value=error_message, inline=True)
+            return 0, 0, 0
+
+    if brokerage:
+        brokerage = brokerage.capitalize()
+        if brokerage in brokerages:
+            current_value, initial_value, profit = await get_profit_summary(brokerage, locals()[f"get_{brokerages[brokerage]}_portfolio"])
+            total_current_value += current_value
+            total_initial_value += initial_value
+            total_profit += profit
+        else:
+            await interaction.response.send_message("Invalid brokerage specified. Please choose from: Robinhood, Public, Webull, Firstrade, Tradier.")
+            return
+    else:
+        for brokerage in brokerages:
+            current_value, initial_value, profit = await get_profit_summary(brokerage, locals()[f"get_{brokerages[brokerage]}_portfolio"])
+            total_current_value += current_value
+            total_initial_value += initial_value
+            total_profit += profit
+
+        embed.add_field(name="Total Profit", value=f"💰 Current Value: ${total_current_value:.2f}\nInitial Value: ${total_initial_value:.2f}\nTotal Profit: ${total_profit:.2f}", inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.command()
+async def profit(ctx, brokerage: str = None):
+    if ctx.channel.id != command_channel_id:
+        await ctx.send(f"This command can only be used in the designated command channel: <#{command_channel_id}>")
+        return
+
+    emojis = {
+        'Robinhood': '📈',
+        'Public': '🌐',
+        'Webull': '📊',
+        'Firstrade': '💹',
+        'Tradier': '💱'
+    }
+
+    brokerages = {
+        'Robinhood': 'robinhood',
+        'Public': 'public',
+        'Webull': 'webull',
+        'Firstrade': 'firstrade',
+        'Tradier': 'tradier'
+    }
+
+    initial_investments = {
+        'Robinhood': float(0),  # Replace with actual initial investment
+        'Public': float(21),  # Replace with actual initial investment
+        'Webull': float(171),  # Replace with actual initial investment
+        'Firstrade': float(11),  # Replace with actual initial investment
+        'Tradier': float(11)  # Replace with actual initial investment
+    }
+
+    total_current_value = 0
+    total_initial_value = 0
+    total_profit = 0
+    embed = discord.Embed(title="📈 Profit Summary", color=0x252850)
+
+    def get_robinhood_portfolio():
+        r.login(robinhood_email, robinhood_password)
+        positions = r.build_holdings()
+        cash = float(r.profiles.load_account_profile().get("buying_power", 0))
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(robinhood_json_file_path))
+
+        for ticker, pos in positions.items():
+            quantity = float(pos.get('quantity', 0))
+            price = float(pos.get('price', 0))
+            stock_value = quantity * price
+            if ticker == 'VUG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    def get_public_portfolio():
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+        positions = public.get_positions()
+        cash = float(public.get_portfolio()["equity"]["cash"])
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(public_json_file_path))
+
+        for pos in positions:
+            ticker = pos['instrument']['symbol']
+            quantity = float(pos.get('quantity', 0))
+            price = float(public.get_symbol_price(ticker))
+            stock_value = quantity * price
+            if ticker == 'VUG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    def get_webull_portfolio():
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+        positions = wb.get_positions()
+        cash = float(wb.get_account()['netLiquidation'])
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(webull_json_file_path))
+
+        for pos in positions:
+            ticker = pos['ticker']['symbol']
+            quantity = float(pos.get('position', 0))
+            price = float(pos.get('lastPrice', 0))
+            stock_value = quantity * price
+            if ticker == 'SCHG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    def get_firstrade_portfolio():
+        max_retries = 3
+        retries = 0
+        logged_in = False
+        while retries < max_retries and not logged_in:
+            try:
+                ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+                ft_accounts = account.FTAccountData(ft_ss)
+                logged_in = True
+            except Exception as e:
+                retries += 1
+                print(f"Firstrade login failed: {e}. Retrying {retries}/{max_retries}...")
+                time.sleep(2)  # Wait before retrying
+
+        account_balance = float(ft_accounts.account_balances[0].replace('$', '').replace(',', ''))
+        positions = ft_accounts.get_positions(ft_accounts.account_numbers[0])
+        total_stock_value = 0
+        arbitrage_tickers = set(read_tickers(firstrade_json_file_path))
+
+        for ticker, data in positions.items():
+            quantity = float(data.get('quantity', '0').replace(',', ''))
+            price = float(data.get('price', '0').replace('+', '').replace(',', ''))
+            stock_value = quantity * price
+            if ticker == 'VUG' or ticker in arbitrage_tickers:
+                total_stock_value += stock_value
+
+        cash = account_balance - total_stock_value
+        total_value = cash + total_stock_value
+        return total_value
+
+    def get_tradier_portfolio():
+        headers = {
+            "Authorization": f"Bearer {tradier_API_key}",
+            "Accept": "application/json"
+        }
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/balances", headers=headers)
+        cash = float(response.json()['balances']['cash']['cash_available'])
+
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/positions", headers=headers)
+        positions = response.json().get('positions', {}).get('position', [])
+        if isinstance(positions, dict):
+            positions = [positions]
+
+        total_value = cash
+        arbitrage_tickers = set(read_tickers(tradier_json_file_path))
+
+        for pos in positions:
+            ticker = pos['symbol']
+            quantity = float(pos.get('quantity', 0))
+            price = get_stock_price(ticker)
+            if price is None:
+                continue
+            stock_value = quantity * price
+            if ticker == 'SCHG' or ticker in arbitrage_tickers:
+                total_value += stock_value
+
+        return total_value
+
+    async def get_profit_summary(brokerage, get_portfolio_func):
+        try:
+            portfolio_value = get_portfolio_func()
+            initial_value = initial_investments[brokerage]
+            profit = portfolio_value - initial_value
+            total_message = f"{emojis[brokerage]} {brokerage}:\nCurrent Value: ${portfolio_value:.2f}\nInitial Value: ${initial_value:.2f}\nProfit: ${profit:.2f}\n"
+            embed.add_field(name=f"{brokerage} Profit", value=total_message, inline=True)
+            return portfolio_value, initial_value, profit
+        except Exception as e:
+            error_message = f"{emojis[brokerage]} {brokerage}: Error fetching data ({e})\n"
+            embed.add_field(name=f"{brokerage} Profit", value=error_message, inline=True)
+            return 0, 0, 0
+
+    if brokerage:
+        brokerage = brokerage.capitalize()
+        if brokerage in brokerages:
+            current_value, initial_value, profit = await get_profit_summary(brokerage, locals()[f"get_{brokerages[brokerage]}_portfolio"])
+            total_current_value += current_value
+            total_initial_value += initial_value
+            total_profit += profit
+        else:
+            await ctx.send("Invalid brokerage specified. Please choose from: Robinhood, Public, Webull, Firstrade, Tradier.")
+            return
+    else:
+        for brokerage in brokerages:
+            current_value, initial_value, profit = await get_profit_summary(brokerage, locals()[f"get_{brokerages[brokerage]}_portfolio"])
+            total_current_value += current_value
+            total_initial_value += initial_value
+            total_profit += profit
+
+        embed.add_field(name="Total Profit", value=f"💰 Current Value: ${total_current_value:.2f}\nInitial Value: ${total_initial_value:.2f}\nTotal Profit: ${total_profit:.2f}", inline=False)
 
     await ctx.send(embed=embed)
 
