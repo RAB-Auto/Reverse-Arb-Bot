@@ -2,8 +2,9 @@ robin_stocks
 public-invest-api
 webull
 firstrade
+fennel-invest-api
 yfinance
 discord.py
-dotenv
+python-dotenv
 schedule
 requests
