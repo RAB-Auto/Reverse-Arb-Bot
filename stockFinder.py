@@ -22,7 +22,7 @@ def get_device_identifier():
     return mac
 
 # Define the allowed device's identifier (replace this with your specific device's identifier)
-ALLOWED_DEVICE_IDENTIFIER = 158394315091676  # Replace with real MAC Address
+ALLOWED_DEVICE_IDENTIFIER = 1234567890  # Replace with real MAC Address
 
 def check_device():
     current_device_identifier = get_device_identifier()
@@ -176,11 +176,16 @@ def validate_stock(driver, stock_name):
     except Exception as e:
         print(f"An error occurred: {e}")
     
-    page_text = driver.find_element(By.TAG_NAME, 'body').text
+    page_text = driver.find_element(By.TAG_NAME, 'body').text.lower()
     keywords = ["rounding", "rounding up", "rounded up", "additional shares", "nearest whole share"]
     phrases = ["rounded up or canceled"]
 
-    return any(keyword in page_text for keyword in keywords) and not any(phrase in page_text for phrase in phrases)
+    for keyword in keywords:
+        if keyword in page_text:
+            for phrase in phrases:
+                if phrase not in page_text:
+                    return True
+    return False
 
 # Update for global declaration and auto trading
 async def scrape_and_verify():
