@@ -16,16 +16,21 @@ from datetime import datetime
 import asyncio
 from dotenv import load_dotenv
 import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
+import matplotlib.style as mplstyle
 
 load_dotenv()
 
 # Define the file paths for credentials and JSON files
-# robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/RobinPass.txt'
-# public_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/PublicPass.txt'
-# webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/WebullPass.txt'
-# firstrade_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/FirstradePass.txt'
-# tradier_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/TradierPass.txt'
-# fennel_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/FennelPass.txt'
+robinhood_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/RobinPass.txt'
+public_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/PublicPass.txt'
+webull_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/WebullPass.txt'
+firstrade_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/FirstradePass.txt'
+tradier_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/TradierPass.txt'
+fennel_file_path = 'C:/Users/arnav/OneDrive/Desktop/RAB/FennelPass.txt'
 robinhood_json_file_path = 'currentArbsRobinhood.json'
 public_json_file_path = 'currentArbsPublic.json'
 webull_json_file_path = 'currentArbsWebull.json'
@@ -35,20 +40,20 @@ fennel_json_file_path = 'currentArbsFennel.json'
 holidays_json_file_path = 'market_holidays.json' # all 2024-2026 holdays are there (last updated: 05/20/2024)
 
 # Initialize variables for credentials
-robinhood_email = os.getenv('robinhood_email')
-robinhood_password = os.getenv('robinhood_password')
-public_username = os.getenv('public_username')
-public_password = os.getenv('public_password')
-webull_number = os.getenv('webull_number')
-webull_password = os.getenv('webull_password')
-webull_trade_token = os.getenv('webull_trade_token')
-firstrade_username = os.getenv('firstrade_username')
-firstrade_password = os.getenv('firstrade_password')
-firstrade_pin = os.getenv('firstrade_pin')
-tradier_API_key = os.getenv('tradier_API_key')
-tradier_account_ID = os.getenv('tradier_account_ID')
-fennel_email = os.getenv('fennel_email')
-fennel_account_id = os.getenv('fennel_account_id')
+# robinhood_email = os.getenv('robinhood_email')
+# robinhood_password = os.getenv('robinhood_password')
+# public_username = os.getenv('public_username')
+# public_password = os.getenv('public_password')
+# webull_number = os.getenv('webull_number')
+# webull_password = os.getenv('webull_password')
+# webull_trade_token = os.getenv('webull_trade_token')
+# firstrade_username = os.getenv('firstrade_username')
+# firstrade_password = os.getenv('firstrade_password')
+# firstrade_pin = os.getenv('firstrade_pin')
+# tradier_API_key = os.getenv('tradier_API_key')
+# tradier_account_ID = os.getenv('tradier_account_ID')
+# fennel_email = os.getenv('fennel_email')
+# fennel_account_id = os.getenv('fennel_account_id')
 
 # Initialize Discord bot with intents
 class MyBot(commands.Bot):
@@ -64,55 +69,55 @@ sell_channel_id = 1240109934654390382  # Replace with your channel ID for sell n
 alerts_channel_id = 1241468924034416691  # Replace with your channel ID for alerts
 command_channel_id = 1249116072423067718 # Replace with your channel ID for commands
 
-# # Read Robinhood credentials from file
-# try:
-#     with open(robinhood_file_path, 'r') as file:
-#         robinhood_email = file.readline().strip()
-#         robinhood_password = file.readline().strip()
-# except Exception as e:
-#     print(f"Failed to read Robinhood credentials file: {e}")
+# Read Robinhood credentials from file
+try:
+    with open(robinhood_file_path, 'r') as file:
+        robinhood_email = file.readline().strip()
+        robinhood_password = file.readline().strip()
+except Exception as e:
+    print(f"Failed to read Robinhood credentials file: {e}")
 
-# # Read Public credentials from file
-# try:
-#     with open(public_file_path, 'r') as file:
-#         public_username = file.readline().strip()
-#         public_password = file.readline().strip()
-# except Exception as e:
-#     print(f"Failed to read Public credentials file: {e}")
+# Read Public credentials from file
+try:
+    with open(public_file_path, 'r') as file:
+        public_username = file.readline().strip()
+        public_password = file.readline().strip()
+except Exception as e:
+    print(f"Failed to read Public credentials file: {e}")
 
-# # Read Webull credentials from file
-# try:
-#     with open(webull_file_path, 'r') as file:
-#         webull_number = file.readline().strip()
-#         webull_password = file.readline().strip()
-#         webull_trade_token = file.readline().strip()
-# except Exception as e:
-#     print(f"Failed to read Robinhood credentials file: {e}")
+# Read Webull credentials from file
+try:
+    with open(webull_file_path, 'r') as file:
+        webull_number = file.readline().strip()
+        webull_password = file.readline().strip()
+        webull_trade_token = file.readline().strip()
+except Exception as e:
+    print(f"Failed to read Robinhood credentials file: {e}")
 
-# # Read Firstrade credentials from file
-# try:
-#     with open(firstrade_file_path, 'r') as file:
-#         firstrade_username = file.readline().strip()
-#         firstrade_password = file.readline().strip()
-#         firstrade_pin = file.readline().strip()
-# except Exception as e:
-#     print(f"Failed to read Firstrade credentials file: {e}")
+# Read Firstrade credentials from file
+try:
+    with open(firstrade_file_path, 'r') as file:
+        firstrade_username = file.readline().strip()
+        firstrade_password = file.readline().strip()
+        firstrade_pin = file.readline().strip()
+except Exception as e:
+    print(f"Failed to read Firstrade credentials file: {e}")
 
-# # Read Tradier credentials from file
-# try:
-#     with open(tradier_file_path, 'r') as file:
-#         tradier_API_key = file.readline().strip()
-#         tradier_account_ID = file.readline().strip()
-# except Exception as e:
-#     print(f"Failed to read Tradier credentials file: {e}")
+# Read Tradier credentials from file
+try:
+    with open(tradier_file_path, 'r') as file:
+        tradier_API_key = file.readline().strip()
+        tradier_account_ID = file.readline().strip()
+except Exception as e:
+    print(f"Failed to read Tradier credentials file: {e}")
 
-# # Read Fennel credentials from file
-# try:
-#     with open(fennel_file_path, 'r') as file:
-#         fennel_email = file.readline().strip()
-#         fennel_account_id = file.readline().strip()
-# except Exception as e:
-#     print(f"Failed to read Fennel credentials file: {e}")
+# Read Fennel credentials from file
+try:
+    with open(fennel_file_path, 'r') as file:
+        fennel_email = file.readline().strip()
+        fennel_account_id = file.readline().strip()
+except Exception as e:
+    print(f"Failed to read Fennel credentials file: {e}")
 
 # Function to read tickers from JSON file
 def read_tickers(file_path):
@@ -713,7 +718,7 @@ def buy_SCHG_fennel():
             else:
                 return {"success": False, "detail": "Unknown order status"}
         else:
-            return {"success": False, "detail": "Not enough buying power to buy SCHG"}
+            return {"success": False, "detail": "Not enough buying power"}
 
     except Exception as e:
         print(f"Failed to place order for SCHG on Fennel: {e}")
@@ -2136,10 +2141,99 @@ async def sell_all_stocks_command(interaction: discord.Interaction, brokerage: s
 
     await interaction.edit_original_response(content=f"Completed sell of all stocks.\n\n" + "\n\n".join(messages))
 
+def get_total_account_value():
+    try:
+        robinhood_value = sum(float(pos['quantity']) * float(pos['price']) for pos in r.build_holdings().values())
+    except Exception:
+        robinhood_value = 0
+
+    try:
+        public = Public()
+        public.login(username=public_username, password=public_password, wait_for_2fa=True)
+        public_value = sum(float(pos['quantity']) * float(public.get_symbol_price(pos['instrument']['symbol'])) for pos in public.get_positions())
+    except Exception:
+        public_value = 0
+
+    try:
+        wb.login(webull_number, webull_password)
+        wb.get_trade_token(webull_trade_token)
+        webull_value = sum(float(pos['position']) * float(pos['lastPrice']) for pos in wb.get_positions())
+    except Exception:
+        webull_value = 0
+
+    try:
+        ft_ss = account.FTSession(username=firstrade_username, password=firstrade_password, pin=firstrade_pin)
+        ft_accounts = account.FTAccountData(ft_ss)
+        firstrade_value = sum(float(data['quantity']) * float(data['price']) for data in ft_accounts.get_positions(ft_accounts.account_numbers[0]).values())
+    except Exception:
+        firstrade_value = 0
+
+    try:
+        response = requests.get(f"https://api.tradier.com/v1/accounts/{tradier_account_ID}/positions", headers={"Authorization": f"Bearer {tradier_API_key}", "Accept": "application/json"})
+        tradier_positions = response.json().get('positions', {}).get('position', [])
+        if isinstance(tradier_positions, dict):
+            tradier_positions = [tradier_positions]
+        tradier_value = sum(float(pos['quantity']) * float(get_stock_price(pos['symbol'])) for pos in tradier_positions)
+    except Exception:
+        tradier_value = 0
+
+    try:
+        fennel = Fennel()
+        fennel.login(email=fennel_email, wait_for_code=True, code=None)
+        fennel_value = sum(float(pos['investment']['marketValue']) for pos in fennel.get_stock_holdings(fennel_account_id))
+    except Exception:
+        fennel_value = 0
+
+    total_value = robinhood_value + public_value + webull_value + firstrade_value + tradier_value + fennel_value
+    return total_value
+
+def update_csv_with_account_values():
+    now = datetime.now()
+    account_value = get_total_account_value()
+    new_data = {'date-time': now.strftime('%Y-%m-%d %H:%M'), 'account value': account_value}
+    df = pd.DataFrame([new_data])
+    df.to_csv('data.csv', mode='a', header=not os.path.exists('data.csv'), index=False, lineterminator='\n')
+
+@bot.tree.command(name="graph", description="Visualize the account value graph")
+async def graph_command(interaction: discord.Interaction):
+    if interaction.channel.id != command_channel_id:
+        await interaction.response.send_message(f"This command can only be used in the designated command channel: <#{command_channel_id}>", ephemeral=True)
+        return
+
+    data = pd.read_csv('data.csv')
+    data['date-time'] = pd.to_datetime(data['date-time'])
+    data.set_index('date-time', inplace=True)
+
+    mplstyle.use('dark_background')
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(data.index, data['account value'], marker='o', color='cyan')
+    plt.title('Account Value Over Time', color='white')
+    plt.xlabel('Month', color='white')
+    plt.ylabel('Account Value', color='white')
+
+    # Format the x-axis to show months
+    plt.gca().xaxis.set_major_locator(mdates.MonthLocator())
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+
+    # Force y-axis to use two decimal places
+    plt.gca().yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.2f}'))
+
+    # Change tick colors to white
+    plt.gca().tick_params(axis='x', colors='white')
+    plt.gca().tick_params(axis='y', colors='white')
+
+    plt.grid(True, color='gray')
+    plt.savefig('account_value_graph.png', facecolor='black')
+    await interaction.response.send_message(file=discord.File('account_value_graph.png'))
+
 # Schedule tasks, sell at 8:45 AM CST on weekdays and buy VUG at 9:00 AM CST on weekdays
 async def schedule_tasks():
     schedule.every().day.at("08:45").do(lambda: asyncio.create_task(sell_all_shares_discord()))
     schedule.every().day.at("09:00").do(lambda: asyncio.create_task(buy_VUG()))
+    schedule.every().day.at("10:00").do(update_csv_with_account_values)
+    schedule.every().day.at("13:00").do(update_csv_with_account_values)
+    schedule.every().day.at("15:00").do(update_csv_with_account_values)
     while True:
         schedule.run_pending()
         await asyncio.sleep(1)
