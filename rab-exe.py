@@ -9,12 +9,19 @@ def get_device_identifier():
     return mac
 
 # Define the allowed device's identifier (replace this with your specific device's identifier)
-ALLOWED_DEVICE_IDENTIFIER = 158394315091676  # Replace with real MAC Address
+ALLOWED_DEVICE_IDENTIFIER = 1234567890  # Replace with real MAC Address
+
+ALLOWED_BOT_TOKEN = "YOUR_ALLOWED_BOT_TOKEN"  # Replace with the allowed bot token
 
 def check_device():
     current_device_identifier = get_device_identifier()
     if current_device_identifier != ALLOWED_DEVICE_IDENTIFIER:
         print("This program can only be run on the authorized device. Please contact us if there is an issue.")
+        sys.exit(1)
+
+def check_bot_token(token):
+    if token != ALLOWED_BOT_TOKEN:
+        print("Invalid bot token. Please provide the correct token.")
         sys.exit(1)
 
 # Call the device check function at the beginning of your main script
@@ -40,7 +47,6 @@ import asyncio
 import requests
 import subprocess
 
-# Configuration file path
 config_file_path = 'config.json'
 setup_completed_flag = 'setup_completed.flag'
 webull_setup_path = os.path.join(os.path.dirname(__file__), '_internal', 'webull_setup.py')
@@ -108,6 +114,9 @@ buy_channel_id = config['buy_channel_id']
 sell_channel_id = config['sell_channel_id']
 alerts_channel_id = config['alerts_channel_id']
 command_channel_id = config['command_channel_id']
+
+# Check the bot token
+check_bot_token(discord_token)
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 robinhood_json_file_path = os.path.join(script_dir, 'currentArbsRobinhood.json')
