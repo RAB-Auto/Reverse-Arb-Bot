@@ -27,7 +27,7 @@ class MyBot(commands.Bot):
 intents = discord.Intents.all()
 intents.messages = True
 bot = MyBot(command_prefix="^", intents=intents)
-discord_token = "MTI1ODkwOTk5ODc1MTI4OTQ2Ng.GbBT4b.IBJEIGs1L9IZKpoH3F624413R_elqfRFW-0Nzo"
+discord_token = ""
 
 @bot.event
 async def on_ready():
