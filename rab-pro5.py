@@ -1,6 +1,6 @@
 import robin_stocks.robinhood as r
 from public_invest_api import Public
-from webull import webull
+from _internal.webull_setup import webull
 from firstrade import account, order
 import yfinance as yf
 import math
