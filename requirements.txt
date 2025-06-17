@@ -7,6 +7,6 @@ schedule==1.2.1
 python-dotenv==1.0.1
 yfinance==0.2.38
 matplotlib==3.8.3
-requests==2.31.0
+requests>=2.32.4
 robin-stocks==2.1.0
 webull==0.0.9.7
